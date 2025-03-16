@@ -1,0 +1,277 @@
+<?php
+
+namespace App\Http\Controllers\Admin;
+
+use App\Http\Controllers\Controller;
+use App\Models\Category;
+use Illuminate\Http\Request;
+use Illuminate\Support\Facades\Storage;
+use Illuminate\Support\Facades\Validator;
+use Illuminate\Support\Str;
+
+class CategoryAdminController extends Controller
+{
+    /**
+     * Display a listing of the categories.
+     *
+     * @return \Illuminate\Http\Response
+     */
+    public function index(Request $request)
+    {
+        $query = Category::with('subcategories', 'parent');
+
+        // Apply filters
+        if ($request->has('parent_id')) {
+            $query->where('parent_id', $request->parent_id);
+        }
+
+        if ($request->has('search')) {
+            $query->where('name', 'like', '%' . $request->search . '%')
+                ->orWhere('description', 'like', '%' . $request->search . '%');
+        }
+
+        if ($request->has('is_active')) {
+            $query->where('is_active', $request->boolean('is_active'));
+        }
+
+        // Order by
+        $orderBy = $request->input('order_by', 'name');
+        $orderDir = $request->input('order_dir', 'asc');
+        $query->orderBy($orderBy, $orderDir);
+
+        $categories = $query->paginate($request->input('per_page', 15));
+
+        return response()->json([
+            'categories' => $categories,
+            'parent_categories' => Category::whereNull('parent_id')->orderBy('name')->get(['id', 'name']),
+        ]);
+    }
+
+    /**
+     * Store a newly created category in storage.
+     *
+     * @param  \Illuminate\Http\Request  $request
+     * @return \Illuminate\Http\Response
+     */
+    public function store(Request $request)
+    {
+        $validator = Validator::make($request->all(), [
+            'name' => 'required|string|max:255',
+            'description' => 'nullable|string',
+            'parent_id' => 'nullable|exists:categories,id',
+            'image' => 'nullable|image|max:2048', // 2MB max
+            'is_active' => 'boolean',
+            'is_featured' => 'boolean',
+            'color' => 'nullable|string|max:20',
+        ]);
+
+        if ($validator->fails()) {
+            return response()->json(['errors' => $validator->errors()], 422);
+        }
+
+        // Generate slug from name
+        $slug = Str::slug($request->name);
+        $originalSlug = $slug;
+        $count = 1;
+
+        // Ensure slug is unique
+        while (Category::where('slug', $slug)->exists()) {
+            $slug = $originalSlug . '-' . $count++;
+        }
+
+        // Handle image upload
+        $imagePath = null;
+        if ($request->hasFile('image')) {
+            $imagePath = $request->file('image')->store('categories', 'public');
+        }
+
+        $category = Category::create([
+            'name' => $request->name,
+            'slug' => $slug,
+            'description' => $request->description,
+            'parent_id' => $request->parent_id,
+            'image' => $imagePath,
+            'is_active' => $request->boolean('is_active', true),
+            'is_featured' => $request->boolean('is_featured', false),
+            'color' => $request->input('color', '#000000'),
+        ]);
+
+        return response()->json([
+            'message' => 'Category created successfully',
+            'category' => $category->load('parent', 'subcategories'),
+        ], 201);
+    }
+
+    /**
+     * Display the specified category.
+     *
+     * @param  int  $id
+     * @return \Illuminate\Http\Response
+     */
+    public function show($id)
+    {
+        $category = Category::with('parent', 'subcategories')->findOrFail($id);
+
+        return response()->json($category);
+    }
+
+    /**
+     * Update the specified category in storage.
+     *
+     * @param  \Illuminate\Http\Request  $request
+     * @param  int  $id
+     * @return \Illuminate\Http\Response
+     */
+    public function update(Request $request, $id)
+    {
+        $category = Category::findOrFail($id);
+
+        $validator = Validator::make($request->all(), [
+            'name' => 'sometimes|required|string|max:255',
+            'description' => 'nullable|string',
+            'parent_id' => 'nullable|exists:categories,id',
+            'image' => 'nullable|image|max:2048', // 2MB max
+            'is_active' => 'boolean',
+            'is_featured' => 'boolean',
+            'color' => 'nullable|string|max:20',
+        ]);
+
+        if ($validator->fails()) {
+            return response()->json(['errors' => $validator->errors()], 422);
+        }
+
+        // Update slug if name changes
+        if ($request->has('name') && $request->name !== $category->name) {
+            $slug = Str::slug($request->name);
+            $originalSlug = $slug;
+            $count = 1;
+
+            // Ensure slug is unique
+            while (Category::where('slug', $slug)->where('id', '!=', $category->id)->exists()) {
+                $slug = $originalSlug . '-' . $count++;
+            }
+
+            $request->merge(['slug' => $slug]);
+        }
+
+        // Prevent category from being its own parent
+        if ($request->has('parent_id') && $request->parent_id == $category->id) {
+            return response()->json([
+                'message' => 'Category cannot be its own parent',
+            ], 422);
+        }
+
+        // Prevent circular references
+        if ($request->has('parent_id') && $request->parent_id) {
+            $parentId = $request->parent_id;
+            $potentialParent = Category::find($parentId);
+            
+            while ($potentialParent && $potentialParent->parent_id) {
+                if ($potentialParent->parent_id == $category->id) {
+                    return response()->json([
+                        'message' => 'Cannot create circular reference in category hierarchy',
+                    ], 422);
+                }
+                $potentialParent = $potentialParent->parent;
+            }
+        }
+
+        // Handle image upload
+        if ($request->hasFile('image')) {
+            // Delete old image if exists
+            if ($category->image) {
+                Storage::disk('public')->delete($category->image);
+            }
+            
+            $imagePath = $request->file('image')->store('categories', 'public');
+            $request->merge(['image' => $imagePath]);
+        }
+
+        $category->update($request->only([
+            'name', 'slug', 'description', 'parent_id', 'image', 'is_active', 'is_featured', 'color',
+        ]));
+
+        return response()->json([
+            'message' => 'Category updated successfully',
+            'category' => $category->fresh(['parent', 'subcategories']),
+        ]);
+    }
+
+    /**
+     * Remove the specified category from storage.
+     *
+     * @param  int  $id
+     * @return \Illuminate\Http\Response
+     */
+    public function destroy($id)
+    {
+        $category = Category::findOrFail($id);
+
+        // Check if category has subcategories
+        if ($category->subcategories()->count() > 0) {
+            return response()->json([
+                'message' => 'Cannot delete category with subcategories. Please delete or reassign subcategories first.',
+            ], 422);
+        }
+
+        // Check if category has products
+        if ($category->products()->count() > 0) {
+            return response()->json([
+                'message' => 'Cannot delete category with products. Please delete or reassign products first.',
+            ], 422);
+        }
+
+        // Delete image if exists
+        if ($category->image) {
+            Storage::disk('public')->delete($category->image);
+        }
+
+        $category->delete();
+
+        return response()->json([
+            'message' => 'Category deleted successfully',
+        ]);
+    }
+
+    /**
+     * Get the full category tree.
+     *
+     * @return \Illuminate\Http\Response
+     */
+    public function tree()
+    {
+        $categories = Category::with('subcategories')
+            ->whereNull('parent_id')
+            ->orderBy('name')
+            ->get();
+
+        return response()->json($categories);
+    }
+
+    /**
+     * Reorder categories.
+     *
+     * @param  \Illuminate\Http\Request  $request
+     * @return \Illuminate\Http\Response
+     */
+    public function reorder(Request $request)
+    {
+        $validator = Validator::make($request->all(), [
+            'categories' => 'required|array',
+            'categories.*.id' => 'required|exists:categories,id',
+            'categories.*.order' => 'required|integer|min:0',
+        ]);
+
+        if ($validator->fails()) {
+            return response()->json(['errors' => $validator->errors()], 422);
+        }
+
+        foreach ($request->categories as $categoryData) {
+            Category::where('id', $categoryData['id'])->update(['order' => $categoryData['order']]);
+        }
+
+        return response()->json([
+            'message' => 'Categories reordered successfully',
+        ]);
+    }
+}

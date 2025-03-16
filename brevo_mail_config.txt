@@ -1,0 +1,14 @@
+# Brevo SMTP Configuration
+# Replace these values in your .env file
+
+MAIL_MAILER=smtp
+MAIL_HOST=smtp-relay.brevo.com
+MAIL_PORT=587
+MAIL_USERNAME=your_brevo_username@example.com
+MAIL_PASSWORD=your_brevo_smtp_key
+MAIL_ENCRYPTION=tls
+MAIL_FROM_ADDRESS=noreply@mmart.com
+MAIL_FROM_NAME="M-Mart+ Support"
+
+# Note: You need to create a Brevo account and get your SMTP credentials
+# from the Brevo dashboard at https://app.brevo.com/settings/keys/smtp

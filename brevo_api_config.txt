@@ -1,0 +1,15 @@
+# Brevo API Configuration
+# Replace these values in your .env file
+
+# Change mail driver to 'brevo'
+MAIL_MAILER=brevo
+
+# Add your Brevo API key (get this from your Brevo account)
+BREVO_API_KEY=your_brevo_api_key_here
+
+# Set the from address and name for your emails
+MAIL_FROM_ADDRESS=noreply@mmart.com
+MAIL_FROM_NAME="M-Mart+ Support"
+
+# Note: You need to create a Brevo account and get your API key
+# from the Brevo dashboard at https://app.brevo.com/settings/keys/api
