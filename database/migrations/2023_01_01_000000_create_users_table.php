@@ -11,23 +11,26 @@ return new class extends Migration
      */
     public function up(): void
     {
-        Schema::create('users', function (Blueprint $table) {
-            $table->id();
-            $table->string('name');
-            $table->string('email')->unique();
-            $table->timestamp('email_verified_at')->nullable();
-            $table->string('password')->nullable(); // Nullable for social auth
-            $table->string('phone')->nullable();
-            $table->string('profile_image')->nullable();
-            $table->string('role')->default('customer'); // customer, admin, etc.
-            
-            // Social authentication fields
-            $table->string('google_id')->nullable();
-            $table->string('apple_id')->nullable();
-            
-            $table->rememberToken();
-            $table->timestamps();
-        });
+        // Skip creating users table as it already exists
+        if (!Schema::hasTable('users')) {
+            Schema::create('users', function (Blueprint $table) {
+                $table->id();
+                $table->string('name');
+                $table->string('email')->unique();
+                $table->timestamp('email_verified_at')->nullable();
+                $table->string('password')->nullable(); // Nullable for social auth
+                $table->string('phone')->nullable();
+                $table->string('profile_image')->nullable();
+                $table->string('role')->default('customer'); // customer, admin, etc.
+                
+                // Social authentication fields
+                $table->string('google_id')->nullable();
+                $table->string('apple_id')->nullable();
+                
+                $table->rememberToken();
+                $table->timestamps();
+            });
+        }
     }
 
     /**
@@ -35,6 +38,6 @@ return new class extends Migration
      */
     public function down(): void
     {
-        Schema::dropIfExists('users');
+        // Do nothing in down method to avoid accidentally dropping the users table
     }
 };

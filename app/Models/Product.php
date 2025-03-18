@@ -20,16 +20,25 @@ class Product extends Model
         'name',
         'slug',
         'description',
+        'short_description',
         'base_price',
         'sale_price',
         'is_featured',
+        'is_new_arrival',
         'is_active',
         'stock_quantity',
+        'total_sold',
         'sku',
         'barcode',
         'category_id',
         'brand',
+        'expiry_date',
         'meta_data',
+        'is_hot_deal',
+        'is_best_seller',
+        'is_expiring_soon',
+        'is_clearance',
+        'is_recommended',
     ];
 
     /**
@@ -41,8 +50,27 @@ class Product extends Model
         'base_price' => 'decimal:2',
         'sale_price' => 'decimal:2',
         'is_featured' => 'boolean',
+        'is_new_arrival' => 'boolean',
         'is_active' => 'boolean',
+        'expiry_date' => 'date',
         'meta_data' => 'json',
+        'is_hot_deal' => 'boolean',
+        'is_best_seller' => 'boolean',
+        'is_expiring_soon' => 'boolean',
+        'is_clearance' => 'boolean',
+        'is_recommended' => 'boolean',
+    ];
+
+    /**
+     * The accessors to append to the model's array form.
+     *
+     * @var array
+     */
+    protected $appends = [
+        'is_on_sale',
+        'is_in_stock',
+        'discount_percentage',
+        'image_url',
     ];
 
     /**
@@ -105,7 +133,60 @@ class Product extends Model
         
         return $this->stock_quantity;
     }
-    
+
+    /**
+     * Determine if the product is on sale.
+     *
+     * @return bool
+     */
+    public function getIsOnSaleAttribute(): bool
+    {
+        return $this->sale_price !== null && $this->sale_price < $this->base_price;
+    }
+
+    /**
+     * Determine if the product is in stock.
+     *
+     * @return bool
+     */
+    public function getIsInStockAttribute(): bool
+    {
+        return $this->stock_quantity > 0;
+    }
+
+    /**
+     * Calculate the discount percentage if the product is on sale.
+     *
+     * @return float|null
+     */
+    public function getDiscountPercentageAttribute(): ?float
+    {
+        if ($this->is_on_sale && $this->base_price > 0) {
+            return round((($this->base_price - $this->sale_price) / $this->base_price) * 100);
+        }
+        
+        return null;
+    }
+
+    /**
+     * Get the primary image URL for the product.
+     *
+     * @return string|null
+     */
+    public function getImageUrlAttribute(): ?string
+    {
+        $primaryImage = $this->images()->where('is_primary', true)->first();
+        
+        if ($primaryImage) {
+            return $primaryImage->image_path;
+        }
+        
+        // If no primary image, return the first image
+        $firstImage = $this->images()->first();
+        
+        return $firstImage ? $firstImage->image_path : null;
+    }
+
     /**
      * Sync the product's stock_quantity with the sum of all its measurements' stock.
      * This should be called after updating measurement stock to keep the product stock in sync.

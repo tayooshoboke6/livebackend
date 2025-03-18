@@ -12,6 +12,8 @@ use App\Http\Controllers\LocationController;
 use App\Http\Controllers\CouponController;
 use App\Http\Controllers\PaymentController;
 use App\Http\Controllers\Admin\CategoryAdminController;
+use App\Http\Controllers\Admin\ProductSectionController;
+use App\Http\Controllers\ProductSectionController as PublicProductSectionController;
 
 /*
 |--------------------------------------------------------------------------
@@ -51,6 +53,11 @@ Route::get('/categories', [CategoryController::class, 'index']);
 Route::get('/categories/tree', [CategoryController::class, 'tree']);
 Route::get('/categories/{category}', [CategoryController::class, 'show']);
 Route::get('/categories/{category}/products', [CategoryController::class, 'products']);
+
+// Product Sections (Public)
+Route::get('/product-sections', [PublicProductSectionController::class, 'index']);
+Route::get('/products/by-type', [PublicProductSectionController::class, 'getProductsByType']);
+Route::get('/products/by-type/{type}', [PublicProductSectionController::class, 'getProductsByTypeParam']);
 
 // Coupons (Public validation)
 Route::post('/coupons/validate', [CouponController::class, 'validateCoupon']);
@@ -103,11 +110,14 @@ Route::middleware(['auth:sanctum', \App\Http\Middleware\CheckRole::class . ':adm
     });
     
     // Product Management
+    Route::get('/products', [ProductController::class, 'index']);
+    Route::get('/products/{product}', [ProductController::class, 'show']);
     Route::post('/products', [ProductController::class, 'store']);
     Route::put('/products/{product}', [ProductController::class, 'update']);
     Route::delete('/products/{product}', [ProductController::class, 'destroy']);
     
     // Category Management
+    Route::get('/categories/stock-data', [\App\Http\Controllers\Admin\CategoryAdminController::class, 'getCategoryStockData']);
     Route::apiResource('/categories', \App\Http\Controllers\Admin\CategoryAdminController::class);
     Route::get('/categories-tree', [\App\Http\Controllers\Admin\CategoryAdminController::class, 'tree']);
     Route::post('/categories-reorder', [\App\Http\Controllers\Admin\CategoryAdminController::class, 'reorder']);
@@ -121,6 +131,15 @@ Route::middleware(['auth:sanctum', \App\Http\Middleware\CheckRole::class . ':adm
     Route::post('/coupons', [CouponController::class, 'store']);
     Route::put('/coupons/{coupon}', [CouponController::class, 'update']);
     Route::delete('/coupons/{coupon}', [CouponController::class, 'destroy']);
+    
+    // Product Section Management
+    Route::get('/product-sections', [\App\Http\Controllers\Admin\ProductSectionController::class, 'index']);
+    Route::post('/product-sections', [\App\Http\Controllers\Admin\ProductSectionController::class, 'store']);
+    Route::get('/product-sections/{id}', [\App\Http\Controllers\Admin\ProductSectionController::class, 'show']);
+    Route::put('/product-sections/{id}', [\App\Http\Controllers\Admin\ProductSectionController::class, 'update']);
+    Route::delete('/product-sections/{id}', [\App\Http\Controllers\Admin\ProductSectionController::class, 'destroy']);
+    Route::patch('/product-sections/{id}/toggle', [\App\Http\Controllers\Admin\ProductSectionController::class, 'toggle']);
+    Route::post('/product-sections/reorder', [\App\Http\Controllers\Admin\ProductSectionController::class, 'reorder']);
     
     // Location Management
     Route::post('/locations', [LocationController::class, 'store']);

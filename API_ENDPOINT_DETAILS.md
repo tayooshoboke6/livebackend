@@ -2,7 +2,7 @@
 
 ## API Endpoints Summary
 
-The M-Mart+ application has **50 distinct API endpoints** in total, organized into the following categories:
+The M-Mart+ application has **52 distinct API endpoints** in total, organized into the following categories:
 
 ## Endpoint Categories
 
@@ -23,6 +23,10 @@ The M-Mart+ application has **50 distinct API endpoints** in total, organized in
 - `GET /api/categories/{category}` - Get category details
 - `GET /api/categories/{category}/products` - Get products by category
 - `POST /api/coupons/validate` - Validate coupon
+
+### 2a. Product Sections (2 endpoints)
+- `GET /api/product-sections` - List all active product sections with their products
+- `GET /api/products/by-type` - Get products by section type (featured, hot_deals, etc.)
 
 ### 3. User Profile (2 endpoints)
 - `GET /api/user` - Get current user profile (authenticated)

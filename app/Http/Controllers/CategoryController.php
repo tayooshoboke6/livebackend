@@ -200,7 +200,7 @@ class CategoryController extends Controller
             : Category::where('slug', $id)->firstOrFail();
 
         $query = $category->products()
-            ->with('measurements')
+            ->with(['category', 'measurements', 'images']) 
             ->when($request->has('search'), function ($q) use ($request) {
                 return $q->where('name', 'like', '%' . $request->search . '%')
                     ->orWhere('description', 'like', '%' . $request->search . '%');
@@ -217,9 +217,26 @@ class CategoryController extends Controller
             $query->where('is_active', true);
         }
 
+        // Get paginated results
         $products = $query->paginate($request->input('per_page', 15));
 
-        return response()->json($products);
+        // Log the response for debugging
+        \Log::info('Category products response for category ID: ' . $id, [
+            'product_count' => $products->count(),
+            'first_product' => $products->count() > 0 ? $products->first()->toArray() : null
+        ]);
+
+        // Format the response to match the product detail endpoint format
+        return response()->json([
+            'success' => true,
+            'products' => $products->items(),
+            'pagination' => [
+                'current_page' => $products->currentPage(),
+                'last_page' => $products->lastPage(),
+                'per_page' => $products->perPage(),
+                'total' => $products->total()
+            ]
+        ]);
     }
 
     /**

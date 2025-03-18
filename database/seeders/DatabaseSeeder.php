@@ -7,6 +7,8 @@ use Database\Seeders\CategorySeeder;
 use Database\Seeders\UserSeeder;
 use Database\Seeders\LocationSeeder;
 use Database\Seeders\BottledWaterProductSeeder;
+use Database\Seeders\ProductSeeder;
+use Database\Seeders\ProductSectionSeeder;
 // use Illuminate\Database\Console\Seeds\WithoutModelEvents;
 use Illuminate\Database\Seeder;
 
@@ -28,6 +30,8 @@ class DatabaseSeeder extends Seeder
             LocationSeeder::class,
             UserSeeder::class,
             CategorySeeder::class,
+            ProductSeeder::class,
+            ProductSectionSeeder::class,
             BottledWaterProductSeeder::class,
         ]);
     }

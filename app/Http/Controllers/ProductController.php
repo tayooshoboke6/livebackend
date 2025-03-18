@@ -12,6 +12,7 @@ use Illuminate\Support\Facades\Validator;
 use Illuminate\Support\Str;
 use Illuminate\Support\Facades\Storage;
 use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Facades\Log;
 
 class ProductController extends Controller
 {
@@ -176,12 +177,29 @@ class ProductController extends Controller
      */
     public function show($id)
     {
+        // Debug log to trace the request
+        Log::info('Product show method called', [
+            'id' => $id,
+            'is_numeric' => is_numeric($id),
+            'request_path' => request()->path(),
+            'is_admin' => request()->is('api/admin/*')
+        ]);
+
         // Allow lookup by ID or slug
         $product = is_numeric($id) 
             ? Product::with(['category', 'measurements', 'images'])->findOrFail($id)
             : Product::with(['category', 'measurements', 'images'])->where('slug', $id)->firstOrFail();
 
-        return response()->json($product);
+        // Log the response for debugging
+        Log::info('Product detail response for ID: ' . $id, [
+            'product' => $product->toArray()
+        ]);
+
+        // Format the response to match what the frontend expects
+        return response()->json([
+            'success' => true,
+            'product' => $product
+        ]);
     }
 
     /**
@@ -198,14 +216,22 @@ class ProductController extends Controller
         $validator = Validator::make($request->all(), [
             'name' => 'sometimes|string|max:255',
             'description' => 'sometimes|string',
-            'price' => 'sometimes|numeric|min:0',
-            'sale_price' => 'nullable|numeric|min:0|lt:price',
-            'stock' => 'sometimes|integer|min:0',
+            'short_description' => 'sometimes|string|nullable',
+            'base_price' => 'sometimes|numeric|min:0',
+            'sale_price' => 'nullable|numeric|min:0|lt:base_price',
+            'stock_quantity' => 'sometimes|integer|min:0',
             'sku' => 'sometimes|string|max:100|unique:products,sku,' . $product->id,
             'category_id' => 'sometimes|exists:categories,id',
             'is_active' => 'boolean',
-            'featured' => 'boolean',
+            'is_featured' => 'boolean',
+            'expiry_date' => 'sometimes|nullable|date',
+            'brand' => 'sometimes|nullable|string',
             'image' => 'nullable|string',
+            'is_hot_deal' => 'boolean',
+            'is_best_seller' => 'boolean',
+            'is_expiring_soon' => 'boolean',
+            'is_clearance' => 'boolean',
+            'is_recommended' => 'boolean',
             'measurements' => 'sometimes|array',
             'measurements.*.id' => 'sometimes|exists:product_measurements,id',
             'measurements.*.name' => 'required|string|max:100',
@@ -241,10 +267,19 @@ class ProductController extends Controller
             }
 
             // Update basic product info
-            $product->update(array_filter($request->only([
-                'name', 'slug', 'description', 'base_price', 'sale_price', 'stock_quantity',
-                'sku', 'category_id', 'is_active', 'featured', 'image',
-            ])));
+            $updateData = $request->only([
+                'name', 'slug', 'description', 'short_description', 'base_price', 'sale_price', 
+                'stock_quantity', 'sku', 'category_id', 'is_active', 'is_featured', 'image',
+                'expiry_date', 'brand', 'is_hot_deal', 'is_best_seller', 'is_expiring_soon',
+                'is_clearance', 'is_recommended'
+            ]);
+            
+            // Filter out null values but keep 0 values, empty strings, and boolean false
+            $updateData = array_filter($updateData, function($value) {
+                return $value !== null;
+            });
+            
+            $product->update($updateData);
             
             // If no image was provided, generate a placeholder based on the product name
             if (!$request->has('image') && !$product->image) {

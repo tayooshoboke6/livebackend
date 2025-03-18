@@ -234,18 +234,88 @@ class CategoryAdminController extends Controller
     }
 
     /**
-     * Get the full category tree.
+     * Get the category tree structure.
      *
      * @return \Illuminate\Http\Response
      */
     public function tree()
     {
-        $categories = Category::with('subcategories')
-            ->whereNull('parent_id')
-            ->orderBy('name')
+        $categories = Category::whereNull('parent_id')
+            ->with(['subcategories' => function ($query) {
+                $query->orderBy('name', 'asc');
+            }])
+            ->orderBy('name', 'asc')
             ->get();
 
-        return response()->json($categories);
+        return response()->json([
+            'categories' => $categories,
+        ]);
+    }
+
+    /**
+     * Get stock data for all categories for the admin dashboard.
+     *
+     * @return \Illuminate\Http\Response
+     */
+    public function getCategoryStockData()
+    {
+        try {
+            // Get all categories
+            $categories = Category::select('id', 'name', 'parent_id')->get();
+            
+            // Get stock data for each category
+            $categoriesWithStock = [];
+            
+            foreach ($categories as $category) {
+                // Count products directly related to this category
+                $productCount = \DB::table('products')
+                    ->where('category_id', $category->id)
+                    ->count();
+                
+                // Sum stock quantity for products in this category
+                $stockQuantity = \DB::table('products')
+                    ->where('category_id', $category->id)
+                    ->sum('stock_quantity') ?? 0;
+                
+                $categoriesWithStock[] = [
+                    'id' => $category->id,
+                    'name' => $category->name,
+                    'parent_id' => $category->parent_id,
+                    'product_count' => $productCount,
+                    'stock' => (int) $stockQuantity,
+                ];
+            }
+            
+            // Aggregate subcategory counts to parent categories
+            $result = $categoriesWithStock;
+            $parentCategories = [];
+            
+            foreach ($categoriesWithStock as $category) {
+                if ($category['parent_id']) {
+                    foreach ($result as &$parentCategory) {
+                        if ($parentCategory['id'] == $category['parent_id']) {
+                            $parentCategory['product_count'] += $category['product_count'];
+                            $parentCategory['stock'] += $category['stock'];
+                            break;
+                        }
+                    }
+                }
+            }
+            
+            // Calculate total stock
+            $totalStock = array_sum(array_column($categoriesWithStock, 'stock'));
+            
+            return response()->json([
+                'categories' => $categoriesWithStock,
+                'totalStock' => $totalStock
+            ]);
+        } catch (\Exception $e) {
+            \Log::error('Error in getCategoryStockData: ' . $e->getMessage());
+            return response()->json([
+                'error' => 'Failed to fetch category stock data',
+                'message' => $e->getMessage()
+            ], 500);
+        }
     }
 
     /**
