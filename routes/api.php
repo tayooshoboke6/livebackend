@@ -13,6 +13,9 @@ use App\Http\Controllers\CouponController;
 use App\Http\Controllers\PaymentController;
 use App\Http\Controllers\Admin\CategoryAdminController;
 use App\Http\Controllers\Admin\ProductSectionController;
+use App\Http\Controllers\Admin\BannerController;
+use App\Http\Controllers\Admin\DashboardController;
+use App\Http\Controllers\AddressController;
 use App\Http\Controllers\ProductSectionController as PublicProductSectionController;
 
 /*
@@ -75,6 +78,15 @@ Route::middleware('auth:sanctum')->group(function () {
     });
     Route::put('/user/profile', [AuthController::class, 'updateProfile']);
     Route::post('/logout', [AuthController::class, 'logout']);
+    Route::post('/refresh-token', [AuthController::class, 'refreshToken']);
+    
+    // User Addresses
+    Route::get('/users/{userId}/addresses', [AddressController::class, 'index']);
+    Route::post('/users/{userId}/addresses', [AddressController::class, 'store']);
+    Route::get('/users/{userId}/addresses/{addressId}', [AddressController::class, 'show']);
+    Route::put('/users/{userId}/addresses/{addressId}', [AddressController::class, 'update']);
+    Route::delete('/users/{userId}/addresses/{addressId}', [AddressController::class, 'destroy']);
+    Route::patch('/users/{userId}/addresses/{addressId}/default', [AddressController::class, 'setDefault']);
     
     // Cart
     Route::get('/cart', [CartController::class, 'index']);
@@ -82,6 +94,10 @@ Route::middleware('auth:sanctum')->group(function () {
     Route::put('/cart/update/{item}', [CartController::class, 'updateItem']);
     Route::delete('/cart/remove/{item}', [CartController::class, 'removeItem']);
     Route::delete('/cart/clear', [CartController::class, 'clearCart']);
+    
+    // User Cart (for frontend persistence)
+    Route::get('/user/cart', [CartController::class, 'getUserCart']);
+    Route::post('/user/cart', [CartController::class, 'saveUserCart']);
     
     // Checkout & Orders
     Route::post('/orders', [OrderController::class, 'store']);
@@ -108,6 +124,17 @@ Route::middleware(['auth:sanctum', \App\Http\Middleware\CheckRole::class . ':adm
             'is_admin' => $request->user()->role === 'admin',
         ]);
     });
+    
+    // Dashboard Statistics
+    Route::get('/dashboard/stats', [DashboardController::class, 'getStats']);
+    
+    // Banner Management
+    Route::get('/banners', [BannerController::class, 'index']);
+    Route::post('/banners', [BannerController::class, 'store']);
+    Route::get('/banners/{id}', [BannerController::class, 'show']);
+    Route::put('/banners/{id}', [BannerController::class, 'update']);
+    Route::delete('/banners/{id}', [BannerController::class, 'destroy']);
+    Route::post('/banners/reorder', [BannerController::class, 'reorder']);
     
     // Product Management
     Route::get('/products', [ProductController::class, 'index']);

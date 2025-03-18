@@ -190,4 +190,60 @@ class CartController extends Controller
             'message' => 'Cart cleared',
         ]);
     }
+    
+    /**
+     * Get the user's saved cart data for frontend persistence.
+     *
+     * @param  \Illuminate\Http\Request  $request
+     * @return \Illuminate\Http\Response
+     */
+    public function getUserCart(Request $request)
+    {
+        $user = $request->user();
+        
+        // Check if user has saved cart data
+        if ($user->cart_data) {
+            return response()->json([
+                'status' => 'success',
+                'data' => json_decode($user->cart_data),
+            ]);
+        }
+        
+        return response()->json([
+            'status' => 'success',
+            'data' => [],
+        ]);
+    }
+    
+    /**
+     * Save the user's cart data for frontend persistence.
+     *
+     * @param  \Illuminate\Http\Request  $request
+     * @return \Illuminate\Http\Response
+     */
+    public function saveUserCart(Request $request)
+    {
+        $user = $request->user();
+        
+        $validator = Validator::make($request->all(), [
+            'items' => 'required|array',
+        ]);
+        
+        if ($validator->fails()) {
+            return response()->json([
+                'status' => 'error',
+                'message' => 'Invalid cart data',
+                'errors' => $validator->errors(),
+            ], 422);
+        }
+        
+        // Save cart data to user record
+        $user->cart_data = json_encode($request->items);
+        $user->save();
+        
+        return response()->json([
+            'status' => 'success',
+            'message' => 'Cart saved successfully',
+        ]);
+    }
 }

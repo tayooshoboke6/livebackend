@@ -192,4 +192,34 @@ class AuthController extends Controller
             ? response()->json(['message' => __($status)])
             : response()->json(['message' => __($status)], 400);
     }
+
+    /**
+     * Refresh the user's token.
+     *
+     * @param  \Illuminate\Http\Request  $request
+     * @return \Illuminate\Http\Response
+     */
+    public function refreshToken(Request $request)
+    {
+        // Get the authenticated user
+        $user = $request->user();
+        
+        if (!$user) {
+            return response()->json([
+                'message' => 'Unauthenticated'
+            ], 401);
+        }
+        
+        // Revoke all existing tokens
+        $user->tokens()->delete();
+        
+        // Create a new token
+        $token = $user->createToken('auth_token')->plainTextToken;
+        
+        return response()->json([
+            'message' => 'Token refreshed successfully',
+            'token' => $token,
+            'user' => $user
+        ]);
+    }
 }

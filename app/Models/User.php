@@ -85,6 +85,14 @@ class User extends Authenticatable
     }
 
     /**
+     * Get the addresses for the user.
+     */
+    public function addresses(): HasMany
+    {
+        return $this->hasMany(Address::class);
+    }
+
+    /**
      * Send the password reset notification.
      *
      * @param  string  $token

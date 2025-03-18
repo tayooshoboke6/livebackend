@@ -20,7 +20,9 @@ class ProductSectionController extends Controller
     {
         $productSections = ProductSection::orderBy('display_order', 'asc')->get();
         
+        // Add success flag to match frontend expectations
         return response()->json([
+            'success' => true,
             'productSections' => $productSections
         ]);
     }
