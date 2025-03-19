@@ -18,33 +18,11 @@ class BannerController extends Controller
      */
     public function index()
     {
-        // For now, return a mock response since we don't have the Banner model yet
+        $banners = Banner::all();
+        
         return response()->json([
-            'success' => true,
-            'data' => [
-                [
-                    'id' => 1,
-                    'title' => 'Special Offers',
-                    'subtitle' => 'Get up to 50% off on selected items',
-                    'image_url' => 'https://via.placeholder.com/1200x400',
-                    'link' => '/products/special-offers',
-                    'is_active' => true,
-                    'position' => 1,
-                    'created_at' => now()->toDateTimeString(),
-                    'updated_at' => now()->toDateTimeString(),
-                ],
-                [
-                    'id' => 2,
-                    'title' => 'New Arrivals',
-                    'subtitle' => 'Check out our latest products',
-                    'image_url' => 'https://via.placeholder.com/1200x400',
-                    'link' => '/products/new-arrivals',
-                    'is_active' => true,
-                    'position' => 2,
-                    'created_at' => now()->toDateTimeString(),
-                    'updated_at' => now()->toDateTimeString(),
-                ],
-            ]
+            'status' => 'success',
+            'banners' => $banners
         ]);
     }
 
@@ -56,21 +34,61 @@ class BannerController extends Controller
      */
     public function store(Request $request)
     {
-        // This is a placeholder for when we implement the Banner model
+        $validator = Validator::make($request->all(), [
+            'label' => 'required|string|max:255',
+            'title' => 'required|string|max:255',
+            'description' => 'required|string',
+            'image' => 'nullable|string',
+            'bgColor' => 'required|string',
+            'imgBgColor' => 'required|string',
+            'link' => 'nullable|string',
+            'active' => 'boolean'
+        ]);
+
+        if ($validator->fails()) {
+            return response()->json([
+                'status' => 'error',
+                'message' => 'Validation failed',
+                'errors' => $validator->errors()
+            ], 422);
+        }
+
+        // Log the request data for debugging
+        \Log::info('Banner create request data:', $request->all());
+
+        $banner = Banner::create([
+            'label' => $request->label,
+            'title' => $request->title,
+            'description' => $request->description,
+            'image' => $request->image,
+            'bg_color' => $request->bgColor, // Convert camelCase to snake_case
+            'img_bg_color' => $request->imgBgColor, // Convert camelCase to snake_case
+            'link' => $request->link,
+            'active' => $request->active ?? true
+        ]);
+
+        // Transform the banner for response
+        $transformedBanner = [
+            'id' => $banner->id,
+            'label' => $banner->label,
+            'title' => $banner->title,
+            'description' => $banner->description,
+            'image' => $banner->image,
+            'bgColor' => $banner->bg_color, // Convert snake_case to camelCase
+            'imgBgColor' => $banner->img_bg_color, // Convert snake_case to camelCase
+            'link' => $banner->link,
+            'active' => (bool)$banner->active,
+            'createdAt' => $banner->created_at,
+            'updatedAt' => $banner->updated_at
+        ];
+
+        // Log the created banner for debugging
+        \Log::info('Banner created:', $banner->toArray());
+
         return response()->json([
-            'success' => true,
+            'status' => 'success',
             'message' => 'Banner created successfully',
-            'data' => [
-                'id' => 3,
-                'title' => $request->title,
-                'subtitle' => $request->subtitle,
-                'image_url' => $request->image_url,
-                'link' => $request->link,
-                'is_active' => $request->is_active ?? true,
-                'position' => 3,
-                'created_at' => now()->toDateTimeString(),
-                'updated_at' => now()->toDateTimeString(),
-            ]
+            'banner' => $transformedBanner
         ]);
     }
 
@@ -108,21 +126,63 @@ class BannerController extends Controller
      */
     public function update(Request $request, $id)
     {
-        // This is a placeholder for when we implement the Banner model
+        $banner = Banner::findOrFail($id);
+        
+        $validator = Validator::make($request->all(), [
+            'label' => 'required|string|max:255',
+            'title' => 'required|string|max:255',
+            'description' => 'required|string',
+            'image' => 'nullable|string',
+            'bgColor' => 'required|string',
+            'imgBgColor' => 'required|string',
+            'link' => 'nullable|string',
+            'active' => 'boolean'
+        ]);
+
+        if ($validator->fails()) {
+            return response()->json([
+                'status' => 'error',
+                'message' => 'Validation failed',
+                'errors' => $validator->errors()
+            ], 422);
+        }
+
+        // Log the request data for debugging
+        \Log::info('Banner update request data:', $request->all());
+
+        $banner->update([
+            'label' => $request->label,
+            'title' => $request->title,
+            'description' => $request->description,
+            'image' => $request->image,
+            'bg_color' => $request->bgColor, // Convert camelCase to snake_case
+            'img_bg_color' => $request->imgBgColor, // Convert camelCase to snake_case
+            'link' => $request->link,
+            'active' => $request->has('active') ? $request->active : $banner->active
+        ]);
+
+        // Transform the banner for response
+        $transformedBanner = [
+            'id' => $banner->id,
+            'label' => $banner->label,
+            'title' => $banner->title,
+            'description' => $banner->description,
+            'image' => $banner->image,
+            'bgColor' => $banner->bg_color, // Convert snake_case to camelCase
+            'imgBgColor' => $banner->img_bg_color, // Convert snake_case to camelCase
+            'link' => $banner->link,
+            'active' => (bool)$banner->active,
+            'createdAt' => $banner->created_at,
+            'updatedAt' => $banner->updated_at
+        ];
+
+        // Log the updated banner for debugging
+        \Log::info('Banner updated:', $banner->toArray());
+
         return response()->json([
-            'success' => true,
+            'status' => 'success',
             'message' => 'Banner updated successfully',
-            'data' => [
-                'id' => $id,
-                'title' => $request->title,
-                'subtitle' => $request->subtitle,
-                'image_url' => $request->image_url,
-                'link' => $request->link,
-                'is_active' => $request->is_active ?? true,
-                'position' => $request->position ?? $id,
-                'created_at' => now()->toDateTimeString(),
-                'updated_at' => now()->toDateTimeString(),
-            ]
+            'banner' => $transformedBanner
         ]);
     }
 
@@ -154,5 +214,32 @@ class BannerController extends Controller
             'success' => true,
             'message' => 'Banners reordered successfully'
         ]);
+    }
+
+    /**
+     * Toggle the active status of a banner.
+     *
+     * @param  int  $id
+     * @return \Illuminate\Http\JsonResponse
+     */
+    public function toggleStatus($id)
+    {
+        try {
+            $banner = Banner::findOrFail($id);
+            $banner->is_active = !$banner->is_active;
+            $banner->save();
+            
+            return response()->json([
+                'status' => 'success',
+                'message' => 'Banner status toggled successfully',
+                'banner' => $banner
+            ]);
+        } catch (\Exception $e) {
+            return response()->json([
+                'status' => 'error',
+                'message' => 'Failed to toggle banner status',
+                'error' => $e->getMessage()
+            ], 500);
+        }
     }
 }

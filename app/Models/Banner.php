@@ -15,12 +15,14 @@ class Banner extends Model
      * @var array<int, string>
      */
     protected $fillable = [
+        'label',
         'title',
-        'subtitle',
-        'image_url',
+        'description',
+        'image',
+        'bg_color',
+        'img_bg_color',
         'link',
-        'is_active',
-        'position',
+        'active',
     ];
 
     /**
@@ -29,7 +31,6 @@ class Banner extends Model
      * @var array<string, string>
      */
     protected $casts = [
-        'is_active' => 'boolean',
-        'position' => 'integer',
+        'active' => 'boolean',
     ];
 }
