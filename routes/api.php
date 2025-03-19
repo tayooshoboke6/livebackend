@@ -18,6 +18,8 @@ use App\Http\Controllers\Admin\DashboardController;
 use App\Http\Controllers\AddressController;
 use App\Http\Controllers\DeliveryFeeController;
 use App\Http\Controllers\ProductSectionController as PublicProductSectionController;
+use App\Http\Controllers\NotificationBarController;
+use App\Http\Controllers\Admin\NotificationBarController as AdminNotificationBarController;
 
 /*
 |--------------------------------------------------------------------------
@@ -73,6 +75,9 @@ Route::post('/delivery-fee/calculate', [DeliveryFeeController::class, 'calculate
 Route::get('/locations', [LocationController::class, 'index']);
 Route::get('/locations/nearby', [LocationController::class, 'nearby']);
 Route::get('/locations/{location}', [LocationController::class, 'show'])->where('location', '[0-9]+');
+
+// Public notification bar
+Route::get('/notification-bar', [NotificationBarController::class, 'getActive']);
 
 // Protected routes
 Route::middleware('auth:sanctum')->group(function () {
@@ -146,6 +151,12 @@ Route::middleware(['auth:sanctum', \App\Http\Middleware\CheckRole::class . ':adm
     Route::put('/banners/{id}', [BannerController::class, 'update']);
     Route::delete('/banners/{id}', [BannerController::class, 'destroy']);
     Route::post('/banners/reorder', [BannerController::class, 'reorder']);
+    Route::put('/banners/{id}/toggle-status', [BannerController::class, 'toggleStatus']);
+    
+    // Notification Bar Management
+    Route::get('/notification-bar', [AdminNotificationBarController::class, 'index']);
+    Route::put('/notification-bar', [AdminNotificationBarController::class, 'update']);
+    Route::put('/notification-bar/toggle-status', [AdminNotificationBarController::class, 'toggleStatus']);
     
     // Product Management
     Route::get('/products', [ProductController::class, 'index']);
