@@ -136,6 +136,18 @@ class LocationController extends Controller
             'longitude' => 'required|numeric',
             'is_active' => 'boolean',
             'opening_hours' => 'nullable|array',
+            // Pickup and delivery fields
+            'is_pickup_available' => 'boolean',
+            'is_delivery_available' => 'boolean',
+            'delivery_radius_km' => 'nullable|numeric|min:0',
+            'delivery_zone_polygon' => 'nullable|array',
+            'delivery_base_fee' => 'nullable|numeric|min:0',
+            'delivery_fee_per_km' => 'nullable|numeric|min:0',
+            'delivery_free_threshold' => 'nullable|numeric|min:0',
+            'delivery_min_order' => 'nullable|numeric|min:0',
+            'max_delivery_distance_km' => 'nullable|numeric|min:0',
+            'outside_geofence_fee' => 'nullable|numeric|min:0',
+            'order_value_adjustments' => 'nullable|array',
         ]);
         
         if ($validator->fails()) {
@@ -173,6 +185,18 @@ class LocationController extends Controller
             'longitude' => 'sometimes|numeric',
             'is_active' => 'boolean',
             'opening_hours' => 'nullable|array',
+            // Pickup and delivery fields
+            'is_pickup_available' => 'boolean',
+            'is_delivery_available' => 'boolean',
+            'delivery_radius_km' => 'nullable|numeric|min:0',
+            'delivery_zone_polygon' => 'nullable|array',
+            'delivery_base_fee' => 'nullable|numeric|min:0',
+            'delivery_fee_per_km' => 'nullable|numeric|min:0',
+            'delivery_free_threshold' => 'nullable|numeric|min:0',
+            'delivery_min_order' => 'nullable|numeric|min:0',
+            'max_delivery_distance_km' => 'nullable|numeric|min:0',
+            'outside_geofence_fee' => 'nullable|numeric|min:0',
+            'order_value_adjustments' => 'nullable|array',
         ]);
         
         if ($validator->fails()) {
@@ -233,6 +257,65 @@ class LocationController extends Controller
         return response()->json([
             'message' => 'Search radius updated successfully',
             'radius' => $request->radius,
+        ]);
+    }
+
+    /**
+     * Toggle the active status of a location.
+     *
+     * @param  int  $id
+     * @return \Illuminate\Http\Response
+     */
+    public function toggleStatus($id)
+    {
+        $location = Location::findOrFail($id);
+        
+        $location->is_active = !$location->is_active;
+        $location->save();
+        
+        return response()->json([
+            'message' => 'Location status updated successfully',
+            'location' => $location->fresh(),
+        ]);
+    }
+
+    /**
+     * Toggle the pickup availability status of the specified location.
+     *
+     * @param  int  $id
+     * @return \Illuminate\Http\Response
+     */
+    public function togglePickup($id)
+    {
+        $location = Location::findOrFail($id);
+        
+        // Toggle the is_pickup_available status
+        $location->is_pickup_available = !$location->is_pickup_available;
+        $location->save();
+        
+        return response()->json([
+            'message' => 'Pickup availability status toggled successfully',
+            'location' => $location->fresh(),
+        ]);
+    }
+
+    /**
+     * Toggle the delivery availability status of the specified location.
+     *
+     * @param  int  $id
+     * @return \Illuminate\Http\Response
+     */
+    public function toggleDelivery($id)
+    {
+        $location = Location::findOrFail($id);
+        
+        // Toggle the is_delivery_available status
+        $location->is_delivery_available = !$location->is_delivery_available;
+        $location->save();
+        
+        return response()->json([
+            'message' => 'Delivery availability status toggled successfully',
+            'location' => $location->fresh(),
         ]);
     }
 }

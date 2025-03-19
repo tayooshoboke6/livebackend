@@ -27,6 +27,17 @@ class Location extends Model
         'longitude',
         'is_active',
         'opening_hours',
+        'is_pickup_available',
+        'is_delivery_available',
+        'delivery_radius_km',
+        'delivery_zone_polygon',
+        'delivery_base_fee',
+        'delivery_fee_per_km',
+        'delivery_free_threshold',
+        'delivery_min_order',
+        'max_delivery_distance_km',
+        'outside_geofence_fee',
+        'order_value_adjustments',
     ];
 
     /**
@@ -39,6 +50,17 @@ class Location extends Model
         'longitude' => 'float',
         'is_active' => 'boolean',
         'opening_hours' => 'array',
+        'is_pickup_available' => 'boolean',
+        'is_delivery_available' => 'boolean',
+        'delivery_radius_km' => 'float',
+        'delivery_zone_polygon' => 'array',
+        'delivery_base_fee' => 'float',
+        'delivery_fee_per_km' => 'float',
+        'delivery_free_threshold' => 'float',
+        'delivery_min_order' => 'float',
+        'max_delivery_distance_km' => 'float',
+        'outside_geofence_fee' => 'float',
+        'order_value_adjustments' => 'array',
     ];
 
     /**

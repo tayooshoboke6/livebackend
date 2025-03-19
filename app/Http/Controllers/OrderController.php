@@ -8,6 +8,7 @@ use App\Models\CartItem;
 use App\Models\Product;
 use App\Models\Coupon;
 use App\Models\Location;
+use App\Services\DeliveryFeeService;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Validator;
 use Illuminate\Support\Facades\DB;
@@ -15,6 +16,19 @@ use Illuminate\Support\Str;
 
 class OrderController extends Controller
 {
+    protected $deliveryFeeService;
+
+    /**
+     * Create a new controller instance.
+     *
+     * @param DeliveryFeeService $deliveryFeeService
+     * @return void
+     */
+    public function __construct(DeliveryFeeService $deliveryFeeService)
+    {
+        $this->deliveryFeeService = $deliveryFeeService;
+    }
+
     /**
      * Display a listing of the user's orders.
      *
@@ -127,7 +141,7 @@ class OrderController extends Controller
             // Calculate order amounts
             $totalAmount = 0;
             $taxAmount = 0;
-            $shippingAmount = $request->delivery_method === 'shipping' ? 5.00 : 0.00; // Example shipping cost
+            $shippingAmount = 0; // Initialize shipping amount
             
             foreach ($cartItems as $cartItem) {
                 $price = $cartItem->product->getCurrentPrice();
@@ -142,6 +156,36 @@ class OrderController extends Controller
             
             // Apply tax (example: 8%)
             $taxAmount = $totalAmount * 0.08;
+            
+            // Calculate shipping fee based on delivery method
+            if ($request->delivery_method === 'shipping') {
+                // If shipping address and coordinates are provided
+                if ($request->has('shipping_latitude') && $request->has('shipping_longitude')) {
+                    $customerLocation = [
+                        $request->shipping_latitude,
+                        $request->shipping_longitude
+                    ];
+                    
+                    $deliveryDetails = $this->deliveryFeeService->calculateDeliveryFee(
+                        $totalAmount,
+                        $customerLocation,
+                        $request->store_id
+                    );
+                    
+                    // Only apply fee if delivery is available
+                    if ($deliveryDetails['isDeliveryAvailable']) {
+                        $shippingAmount = $deliveryDetails['fee'];
+                    } else {
+                        return response()->json([
+                            'status' => 'error',
+                            'message' => $deliveryDetails['message']
+                        ], 422);
+                    }
+                } else {
+                    // Fallback to default shipping fee if coordinates not provided
+                    $shippingAmount = 500; // Default ₦500
+                }
+            }
             
             // Apply coupon if provided
             $discountAmount = 0;

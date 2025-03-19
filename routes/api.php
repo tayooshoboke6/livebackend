@@ -16,6 +16,7 @@ use App\Http\Controllers\Admin\ProductSectionController;
 use App\Http\Controllers\Admin\BannerController;
 use App\Http\Controllers\Admin\DashboardController;
 use App\Http\Controllers\AddressController;
+use App\Http\Controllers\DeliveryFeeController;
 use App\Http\Controllers\ProductSectionController as PublicProductSectionController;
 
 /*
@@ -64,6 +65,9 @@ Route::get('/products/by-type/{type}', [PublicProductSectionController::class, '
 
 // Coupons (Public validation)
 Route::post('/coupons/validate', [CouponController::class, 'validateCoupon']);
+
+// Delivery Fee Calculation (Public)
+Route::post('/delivery-fee/calculate', [DeliveryFeeController::class, 'calculate']);
 
 // Store Locations (Public)
 Route::get('/locations', [LocationController::class, 'index']);
@@ -127,6 +131,13 @@ Route::middleware(['auth:sanctum', \App\Http\Middleware\CheckRole::class . ':adm
     
     // Dashboard Statistics
     Route::get('/dashboard/stats', [DashboardController::class, 'getStats']);
+    Route::get('/dashboard/recent-orders', [DashboardController::class, 'getRecentOrders']);
+    
+    // Delivery Settings
+    Route::get('/delivery-settings/global', [App\Http\Controllers\Admin\DeliverySettingsController::class, 'getGlobalSettings']);
+    Route::put('/delivery-settings/global', [App\Http\Controllers\Admin\DeliverySettingsController::class, 'updateGlobalSettings']);
+    Route::get('/delivery-settings/store/{storeId}', [App\Http\Controllers\Admin\DeliverySettingsController::class, 'getStoreSettings']);
+    Route::put('/delivery-settings/store/{storeId}', [App\Http\Controllers\Admin\DeliverySettingsController::class, 'updateStoreSettings']);
     
     // Banner Management
     Route::get('/banners', [BannerController::class, 'index']);
@@ -169,10 +180,15 @@ Route::middleware(['auth:sanctum', \App\Http\Middleware\CheckRole::class . ':adm
     Route::post('/product-sections/reorder', [\App\Http\Controllers\Admin\ProductSectionController::class, 'reorder']);
     
     // Location Management
+    Route::get('/locations', [LocationController::class, 'index']);
+    Route::get('/locations/{location}', [LocationController::class, 'show']);
     Route::post('/locations', [LocationController::class, 'store']);
     Route::put('/locations/{location}', [LocationController::class, 'update']);
     Route::delete('/locations/{location}', [LocationController::class, 'destroy']);
     Route::put('/locations/radius', [LocationController::class, 'updateRadius']);
+    Route::put('/locations/{location}/toggle-status', [LocationController::class, 'toggleStatus']);
+    Route::put('/locations/{location}/toggle-pickup', [LocationController::class, 'togglePickup']);
+    Route::put('/locations/{location}/toggle-delivery', [LocationController::class, 'toggleDelivery']);
     
     // Payment Management
     Route::get('/orders/{order}/payments', [PaymentController::class, 'adminViewPayment']);
