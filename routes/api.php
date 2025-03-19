@@ -20,6 +20,8 @@ use App\Http\Controllers\DeliveryFeeController;
 use App\Http\Controllers\ProductSectionController as PublicProductSectionController;
 use App\Http\Controllers\NotificationBarController;
 use App\Http\Controllers\Admin\NotificationBarController as AdminNotificationBarController;
+use App\Http\Controllers\Admin\MessageCampaignController;
+use App\Http\Controllers\UserNotificationController;
 
 /*
 |--------------------------------------------------------------------------
@@ -89,6 +91,14 @@ Route::middleware('auth:sanctum')->group(function () {
     Route::post('/logout', [AuthController::class, 'logout']);
     Route::post('/refresh-token', [AuthController::class, 'refreshToken']);
     
+    // User notifications
+    Route::get('/notifications', [UserNotificationController::class, 'index']);
+    Route::get('/notifications/unread/count', [UserNotificationController::class, 'getUnreadCount']);
+    Route::get('/notifications/{id}', [UserNotificationController::class, 'show']);
+    Route::post('/notifications/{id}/read', [UserNotificationController::class, 'markAsRead']);
+    Route::post('/notifications/read-all', [UserNotificationController::class, 'markAllAsRead']);
+    Route::delete('/notifications/{id}', [UserNotificationController::class, 'destroy']);
+
     // User Addresses
     Route::get('/users/{userId}/addresses', [AddressController::class, 'index']);
     Route::post('/users/{userId}/addresses', [AddressController::class, 'store']);
@@ -204,4 +214,13 @@ Route::middleware(['auth:sanctum', \App\Http\Middleware\CheckRole::class . ':adm
     // Payment Management
     Route::get('/orders/{order}/payments', [PaymentController::class, 'adminViewPayment']);
     Route::put('/orders/{order}/payments/status', [PaymentController::class, 'updatePaymentStatus']);
+    
+    // Message Campaigns
+    Route::get('/messages/campaigns', [MessageCampaignController::class, 'index']);
+    Route::post('/messages/campaigns', [MessageCampaignController::class, 'store']);
+    Route::get('/messages/campaigns/{id}', [MessageCampaignController::class, 'show']);
+    Route::put('/messages/campaigns/{id}', [MessageCampaignController::class, 'update']);
+    Route::delete('/messages/campaigns/{id}', [MessageCampaignController::class, 'destroy']);
+    Route::post('/messages/campaigns/{id}/send', [MessageCampaignController::class, 'send']);
+    Route::get('/users/segments', [MessageCampaignController::class, 'getUserSegments']);
 });
