@@ -22,6 +22,8 @@ use App\Http\Controllers\NotificationBarController;
 use App\Http\Controllers\Admin\NotificationBarController as AdminNotificationBarController;
 use App\Http\Controllers\Admin\MessageCampaignController;
 use App\Http\Controllers\UserNotificationController;
+use App\Http\Controllers\Admin\OrderController as AdminOrderController;
+use App\Http\Controllers\Admin\UserController;
 
 /*
 |--------------------------------------------------------------------------
@@ -182,8 +184,10 @@ Route::middleware(['auth:sanctum', \App\Http\Middleware\CheckRole::class . ':adm
     Route::post('/categories-reorder', [\App\Http\Controllers\Admin\CategoryAdminController::class, 'reorder']);
     
     // Order Management
-    Route::get('/orders', [OrderController::class, 'adminIndex']);
-    Route::put('/orders/{order}/status', [OrderController::class, 'updateStatus']);
+    Route::get('/orders', [AdminOrderController::class, 'index']);
+    Route::get('/orders/{id}', [AdminOrderController::class, 'show']);
+    Route::patch('/orders/{id}/status', [AdminOrderController::class, 'updateStatus']);
+    Route::get('/dashboard/order-stats', [AdminOrderController::class, 'getStats']);
     
     // Coupon Management
     Route::get('/coupons', [CouponController::class, 'index']);
@@ -223,4 +227,12 @@ Route::middleware(['auth:sanctum', \App\Http\Middleware\CheckRole::class . ':adm
     Route::delete('/messages/campaigns/{id}', [MessageCampaignController::class, 'destroy']);
     Route::post('/messages/campaigns/{id}/send', [MessageCampaignController::class, 'send']);
     Route::get('/users/segments', [MessageCampaignController::class, 'getUserSegments']);
+    
+    // User Management
+    Route::get('/users', [\App\Http\Controllers\Admin\UserController::class, 'index']);
+    Route::post('/users', [\App\Http\Controllers\Admin\UserController::class, 'store']);
+    Route::get('/users/{id}', [\App\Http\Controllers\Admin\UserController::class, 'show']);
+    Route::put('/users/{id}', [\App\Http\Controllers\Admin\UserController::class, 'update']);
+    Route::delete('/users/{id}', [\App\Http\Controllers\Admin\UserController::class, 'destroy']);
+    Route::patch('/users/{id}/status', [\App\Http\Controllers\Admin\UserController::class, 'updateStatus']);
 });

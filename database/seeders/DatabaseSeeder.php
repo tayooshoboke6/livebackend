@@ -10,6 +10,7 @@ use Database\Seeders\BottledWaterProductSeeder;
 use Database\Seeders\ProductSeeder;
 use Database\Seeders\ProductSectionSeeder;
 use Database\Seeders\MessageCampaignSeeder;
+use Database\Seeders\OrderSeeder;
 // use Illuminate\Database\Console\Seeds\WithoutModelEvents;
 use Illuminate\Database\Seeder;
 
@@ -35,6 +36,7 @@ class DatabaseSeeder extends Seeder
             ProductSectionSeeder::class,
             BottledWaterProductSeeder::class,
             MessageCampaignSeeder::class,
+            OrderSeeder::class,
         ]);
     }
 }

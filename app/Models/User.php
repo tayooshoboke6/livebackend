@@ -33,6 +33,7 @@ class User extends Authenticatable
         'google_id',
         'apple_id',
         'profile_photo',
+        'is_active',
     ];
 
     /**
