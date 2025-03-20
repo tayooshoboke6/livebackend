@@ -161,7 +161,7 @@ class ProductSeeder extends Seeder
             for ($i = 1; $i <= $imageCount; $i++) {
                 ProductImage::create([
                     'product_id' => $product->id,
-                    'image_path' => "https://via.placeholder.com/600x600.png?text=" . Str::slug($product->name) . "-$i",
+                    'image_path' => "https://placehold.co/600x600/png?text=" . Str::slug($product->name) . "-$i",
                     'is_primary' => $i === 1, // First image is primary
                     'sort_order' => $i,
                 ]);

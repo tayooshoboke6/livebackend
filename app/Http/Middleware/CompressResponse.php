@@ -4,43 +4,82 @@ namespace App\Http\Middleware;
 
 use Closure;
 use Illuminate\Http\Request;
-use Symfony\Component\HttpFoundation\Response;
+use Illuminate\Http\Response;
+use Illuminate\Http\JsonResponse;
+use Illuminate\Support\Facades\Cache;
 
 class CompressResponse
 {
     /**
+     * Content types that should be compressed
+     */
+    protected $compressibleTypes = [
+        'application/json',
+        'text/html',
+        'text/plain',
+        'text/css',
+        'text/javascript',
+        'application/javascript',
+        'application/x-javascript',
+    ];
+
+    /**
+     * Minimum size in bytes before compression is applied
+     */
+    protected $compressionThreshold = 1024; // 1KB
+
+    /**
      * Handle an incoming request.
      *
-     * @param  \Closure(\Illuminate\Http\Request): (\Symfony\Component\HttpFoundation\Response)  $next
+     * @param  \Illuminate\Http\Request  $request
+     * @param  \Closure  $next
+     * @return mixed
      */
-    public function handle(Request $request, Closure $next): Response
+    public function handle(Request $request, Closure $next)
     {
+        // Process the request
         $response = $next($request);
 
-        // Check if the client accepts encoding
-        $acceptEncoding = $request->header('Accept-Encoding');
+        // Only compress if the client accepts gzip encoding
+        if (!$this->shouldCompress($request, $response)) {
+            return $response;
+        }
 
-        // Don't compress if the response is already compressed or if it's a binary file
-        if (!$response->headers->has('Content-Encoding') && $this->shouldCompress($response)) {
-            // Check for Brotli support (higher compression, better performance)
-            if (strpos($acceptEncoding, 'br') !== false && function_exists('brotli_compress')) {
-                $compressed = brotli_compress($response->getContent(), 4); // Compression level 4 (0-11)
-                if ($compressed !== false) {
-                    $response->setContent($compressed);
-                    $response->headers->set('Content-Encoding', 'br');
-                }
-            } 
-            // Fall back to gzip if brotli is not available or failed
-            elseif (strpos($acceptEncoding, 'gzip') !== false) {
-                $compressed = gzencode($response->getContent(), 6); // Compression level 6 (0-9)
-                if ($compressed !== false) {
-                    $response->setContent($compressed);
-                    $response->headers->set('Content-Encoding', 'gzip');
-                }
-            }
+        // Get the response content
+        $content = $response->getContent();
+        
+        // Only compress if content is larger than threshold
+        if (strlen($content) < $this->compressionThreshold) {
+            return $response;
+        }
 
-            // Remove the content length header as it's no longer valid after compression
-            $response->headers->remove('Content-Length');
+        // Generate a cache key for the compressed content
+        $cacheKey = 'compressed_response_' . md5($content);
+        
+        // Try to get compressed content from cache
+        $compressedContent = Cache::remember($cacheKey, 60, function () use ($content) {
+            return $this->compressContent($content);
+        });
+
+        // Set the compressed content
+        $response->setContent($compressedContent);
+        
+        // Add appropriate headers
+        $response->header('Content-Encoding', 'gzip');
+        $response->header('Vary', 'Accept-Encoding');
+        
+        // Update content length if it exists
+        if ($response->headers->has('Content-Length')) {
+            $response->header('Content-Length', strlen($compressedContent));
+        }
+
+        // Add performance headers
+        $response->header('X-Response-Time', round(microtime(true) - LARAVEL_START, 3) . 's');
+        
+        // Add cache control headers for better browser caching
+        if (!$response->headers->has('Cache-Control')) {
+            // Default cache control for API responses
+            $response->header('Cache-Control', 'private, max-age=60');
         }
 
         return $response;
@@ -49,35 +88,50 @@ class CompressResponse
     /**
      * Determine if the response should be compressed.
      *
-     * @param  \Symfony\Component\HttpFoundation\Response  $response
+     * @param  \Illuminate\Http\Request  $request
+     * @param  \Illuminate\Http\Response|\Illuminate\Http\JsonResponse  $response
      * @return bool
      */
-    protected function shouldCompress(Response $response): bool
+    protected function shouldCompress(Request $request, $response)
     {
-        // Only compress text-based content types
-        $contentType = $response->headers->get('Content-Type');
-        if (!$contentType) {
+        // Check if client accepts gzip encoding
+        if (!$request->header('Accept-Encoding') || !str_contains($request->header('Accept-Encoding'), 'gzip')) {
             return false;
         }
 
-        $compressibleTypes = [
-            'text/html',
-            'text/plain',
-            'text/css',
-            'text/javascript',
-            'application/javascript',
-            'application/json',
-            'application/xml',
-            'application/xhtml+xml',
-            'image/svg+xml',
-        ];
+        // Only compress GET requests for better performance
+        if (!$request->isMethod('GET')) {
+            return false;
+        }
 
-        foreach ($compressibleTypes as $type) {
-            if (strpos($contentType, $type) !== false) {
-                return true;
+        // Don't compress responses that are already compressed
+        if ($response->headers->has('Content-Encoding')) {
+            return false;
+        }
+
+        // Check if the content type is compressible
+        $contentType = $response->headers->get('Content-Type');
+        if ($contentType) {
+            foreach ($this->compressibleTypes as $type) {
+                if (str_contains($contentType, $type)) {
+                    return true;
+                }
             }
         }
 
-        return false;
+        // For JSON responses without explicit content type
+        return $response instanceof JsonResponse;
+    }
+
+    /**
+     * Compress the content using gzip.
+     *
+     * @param  string  $content
+     * @return string
+     */
+    protected function compressContent($content)
+    {
+        // Use highest compression level (9) for smallest size
+        return gzencode($content, 9);
     }
 }

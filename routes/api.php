@@ -24,6 +24,7 @@ use App\Http\Controllers\Admin\MessageCampaignController;
 use App\Http\Controllers\UserNotificationController;
 use App\Http\Controllers\Admin\OrderController as AdminOrderController;
 use App\Http\Controllers\Admin\UserController;
+use App\Http\Controllers\HomePageController;
 
 /*
 |--------------------------------------------------------------------------
@@ -41,57 +42,50 @@ Route::post('/register', [AuthController::class, 'register']);
 Route::post('/login', [AuthController::class, 'login']);
 Route::post('/auth/google', [SocialAuthController::class, 'googleAuth']);
 Route::post('/auth/apple', [SocialAuthController::class, 'appleAuth']);
+Route::post('/auth/refresh', [AuthController::class, 'refresh']);
 Route::post('/forgot-password', [AuthController::class, 'forgotPassword']);
 Route::post('/reset-password', [AuthController::class, 'resetPassword']);
 
-// Test endpoint for social auth
-Route::post('/auth/google/test', [SocialAuthController::class, 'testGoogleAuth']);
+// Public content routes
+Route::get('/banners', [BannerController::class, 'getActiveBanners']);
+Route::get('/notification-bar', [NotificationBarController::class, 'getActive']);
 
-// Flutterwave webhook (must be public)
-Route::post('/webhooks/flutterwave', [PaymentController::class, 'handleWebhook']);
-
-// Payment callback routes (must be public)
-Route::get('/payments/callback', [PaymentController::class, 'handleCallback'])->name('payment.callback');
-Route::get('/payment/callback', [PaymentController::class, 'handleCallback'])->name('payment.callback.alt');
-Route::get('/payments/callback/{status}', [PaymentController::class, 'handleCallback'])->name('payment.callback.status');
-Route::get('/payment/callback/{status}', [PaymentController::class, 'handleCallback'])->name('payment.callback.alt.status');
-
-// Products & Categories (Public)
 Route::get('/products', [ProductController::class, 'index']);
-Route::get('/products/{product}', [ProductController::class, 'show']);
-Route::get('/categories', [CategoryController::class, 'index']);
-Route::get('/categories/tree', [CategoryController::class, 'tree']);
-Route::get('/categories/{category}', [CategoryController::class, 'show']);
-Route::get('/categories/{category}/products', [CategoryController::class, 'products']);
-
-// Product Sections (Public)
+Route::get('/products/featured', [PublicProductSectionController::class, 'getFeaturedProducts']);
+Route::get('/products/new-arrivals', [PublicProductSectionController::class, 'getNewArrivals']);
+Route::get('/products/best-sellers', [PublicProductSectionController::class, 'getBestSellers']);
 Route::get('/product-sections', [PublicProductSectionController::class, 'index']);
 Route::get('/products/by-type', [PublicProductSectionController::class, 'getProductsByType']);
 Route::get('/products/by-type/{type}', [PublicProductSectionController::class, 'getProductsByTypeParam']);
+Route::get('/products/{product}', [ProductController::class, 'show']);
 
-// Coupons (Public validation)
+Route::get('/categories', [CategoryController::class, 'index']);
+Route::get('/categories/tree', [CategoryController::class, 'getCategoryTree']);
+Route::get('/categories/batch-products', [CategoryController::class, 'batchProductCounts']);
+Route::get('/categories/{category}', [CategoryController::class, 'show']);
+Route::get('/categories/{category}/products', [CategoryController::class, 'products']);
+
 Route::post('/coupons/validate', [CouponController::class, 'validateCoupon']);
-
-// Delivery Fee Calculation (Public)
 Route::post('/delivery-fee/calculate', [DeliveryFeeController::class, 'calculate']);
-
-// Store Locations (Public)
 Route::get('/locations', [LocationController::class, 'index']);
 Route::get('/locations/nearby', [LocationController::class, 'nearby']);
 Route::get('/locations/{location}', [LocationController::class, 'show'])->where('location', '[0-9]+');
+Route::get('/homepage-data', [HomePageController::class, 'index']);
+Route::post('/homepage-data/sections', [HomePageController::class, 'getSpecificSections']);
 
-// Public notification bar
-Route::get('/notification-bar', [NotificationBarController::class, 'getActive']);
-
-// Protected routes
+// Auth routes that require token
 Route::middleware('auth:sanctum')->group(function () {
+    Route::post('/auth/logout', [AuthController::class, 'logout']);
+    
     // User profile
     Route::get('/user', function (Request $request) {
-        return $request->user();
+        return response()->json([
+            'success' => true,
+            'user' => $request->user(),
+            'message' => 'User data retrieved successfully'
+        ]);
     });
-    Route::put('/user/profile', [AuthController::class, 'updateProfile']);
-    Route::post('/logout', [AuthController::class, 'logout']);
-    Route::post('/refresh-token', [AuthController::class, 'refreshToken']);
+    Route::put('/user', [AuthController::class, 'updateProfile']);
     
     // User notifications
     Route::get('/notifications', [UserNotificationController::class, 'index']);
@@ -116,8 +110,16 @@ Route::middleware('auth:sanctum')->group(function () {
     Route::delete('/cart/remove/{item}', [CartController::class, 'removeItem']);
     Route::delete('/cart/clear', [CartController::class, 'clearCart']);
     
-    // User Cart (for frontend persistence)
+    // User Cart - New optimized endpoints
     Route::get('/user/cart', [CartController::class, 'getUserCart']);
+    Route::post('/user/cart/replace', [CartController::class, 'replaceCart']);
+    Route::post('/user/cart/add', [CartController::class, 'addCartItem']);
+    Route::post('/user/cart/remove', [CartController::class, 'removeCartItem']);
+    Route::post('/user/cart/update', [CartController::class, 'updateCartItem']);
+    Route::post('/user/cart/clear', [CartController::class, 'clearUserCart']);
+    Route::post('/user/cart/initialize', [CartController::class, 'initializeFromLocal']);
+    
+    // User Cart (for frontend persistence)
     Route::post('/user/cart', [CartController::class, 'saveUserCart']);
     
     // Checkout & Orders
@@ -161,13 +163,12 @@ Route::middleware(['auth:sanctum', \App\Http\Middleware\CheckRole::class . ':adm
     Route::get('/delivery-settings/store/{storeId}', [App\Http\Controllers\Admin\DeliverySettingsController::class, 'getStoreSettings']);
     Route::put('/delivery-settings/store/{storeId}', [App\Http\Controllers\Admin\DeliverySettingsController::class, 'updateStoreSettings']);
     
-    // Banner Management
+    // Banner management
     Route::get('/banners', [BannerController::class, 'index']);
     Route::post('/banners', [BannerController::class, 'store']);
     Route::get('/banners/{id}', [BannerController::class, 'show']);
     Route::put('/banners/{id}', [BannerController::class, 'update']);
     Route::delete('/banners/{id}', [BannerController::class, 'destroy']);
-    Route::post('/banners/reorder', [BannerController::class, 'reorder']);
     Route::put('/banners/{id}/toggle-status', [BannerController::class, 'toggleStatus']);
     
     // Notification Bar Management
@@ -241,3 +242,15 @@ Route::middleware(['auth:sanctum', \App\Http\Middleware\CheckRole::class . ':adm
     Route::delete('/users/{id}', [\App\Http\Controllers\Admin\UserController::class, 'destroy']);
     Route::patch('/users/{id}/status', [\App\Http\Controllers\Admin\UserController::class, 'updateStatus']);
 });
+
+// Test endpoint for social auth
+Route::post('/auth/google/test', [SocialAuthController::class, 'testGoogleAuth']);
+
+// Flutterwave webhook (must be public)
+Route::post('/webhooks/flutterwave', [PaymentController::class, 'handleWebhook']);
+
+// Payment callback routes (must be public)
+Route::get('/payments/callback', [PaymentController::class, 'handleCallback'])->name('payment.callback');
+Route::get('/payment/callback', [PaymentController::class, 'handleCallback'])->name('payment.callback.alt');
+Route::get('/payments/callback/{status}', [PaymentController::class, 'handleCallback'])->name('payment.callback.status');
+Route::get('/payment/callback/{status}', [PaymentController::class, 'handleCallback'])->name('payment.callback.alt.status');

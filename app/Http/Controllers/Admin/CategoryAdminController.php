@@ -124,6 +124,7 @@ class CategoryAdminController extends Controller
      */
     public function update(Request $request, $id)
     {
+        \Log::info('Category update request:', $request->all());
         $category = Category::findOrFail($id);
 
         $validator = Validator::make($request->all(), [
@@ -137,6 +138,7 @@ class CategoryAdminController extends Controller
         ]);
 
         if ($validator->fails()) {
+            \Log::error('Category validation failed:', $validator->errors()->toArray());
             return response()->json(['errors' => $validator->errors()], 422);
         }
 
@@ -187,9 +189,13 @@ class CategoryAdminController extends Controller
             $request->merge(['image' => $imagePath]);
         }
 
-        $category->update($request->only([
+        $updateData = $request->only([
             'name', 'slug', 'description', 'parent_id', 'image', 'is_active', 'is_featured', 'color',
-        ]));
+        ]);
+        \Log::info('Updating category with data:', $updateData);
+
+        $category->update($updateData);
+        \Log::info('Category after update:', $category->toArray());
 
         return response()->json([
             'message' => 'Category updated successfully',

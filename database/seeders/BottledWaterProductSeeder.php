@@ -85,7 +85,7 @@ class BottledWaterProductSeeder extends Seeder
             'product_id' => $product->id,
             'unit' => 'Pack',
             'value' => 6,
-            'price' => 2700.00, // 6 bottles at 450 each
+            'base_price' => 2700.00, // 6 bottles at 450 each
             'sale_price' => 2500.00, // with a small discount
             'stock_quantity' => 30,
             'sku' => 'WATER-PACK-6-' . Str::random(4),
@@ -98,7 +98,7 @@ class BottledWaterProductSeeder extends Seeder
             'product_id' => $product->id,
             'unit' => 'Pack',
             'value' => 12,
-            'price' => 5400.00, // 12 bottles at 450 each
+            'base_price' => 5400.00, // 12 bottles at 450 each
             'sale_price' => 5000.00, // with a discount
             'stock_quantity' => 15,
             'sku' => 'WATER-PACK-12-' . Str::random(4),
@@ -111,7 +111,7 @@ class BottledWaterProductSeeder extends Seeder
             'product_id' => $product->id,
             'unit' => 'Piece',
             'value' => 1,
-            'price' => 500.00, // Regular price
+            'base_price' => 500.00, // Regular price
             'sale_price' => 450.00, // Sale price
             'stock_quantity' => 80,
             'sku' => 'WATER-PIECE-' . Str::random(4),

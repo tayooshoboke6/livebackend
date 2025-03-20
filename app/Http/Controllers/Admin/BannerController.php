@@ -8,17 +8,22 @@ use App\Models\Banner;
 use Illuminate\Support\Facades\Storage;
 use Illuminate\Support\Facades\Validator;
 use Illuminate\Support\Str;
+use Illuminate\Support\Facades\Cache;
 
 class BannerController extends Controller
 {
     /**
      * Display a listing of the banners.
+     * Optimized with caching to improve response time.
      *
      * @return \Illuminate\Http\JsonResponse
      */
     public function index()
     {
-        $banners = Banner::all();
+        // Cache banners for 10 minutes to improve performance
+        $banners = Cache::remember('admin.banners', 600, function () {
+            return Banner::all();
+        });
         
         return response()->json([
             'status' => 'success',
@@ -67,6 +72,9 @@ class BannerController extends Controller
             'active' => $request->active ?? true
         ]);
 
+        // Clear the banners cache when a new banner is added
+        Cache::forget('admin.banners');
+
         // Transform the banner for response
         $transformedBanner = [
             'id' => $banner->id,
@@ -107,7 +115,7 @@ class BannerController extends Controller
                 'id' => $id,
                 'title' => 'Banner ' . $id,
                 'subtitle' => 'Banner subtitle',
-                'image_url' => 'https://via.placeholder.com/1200x400',
+                'image_url' => 'https://placehold.co/1200x400/png',
                 'link' => '/products/category-' . $id,
                 'is_active' => true,
                 'position' => $id,
@@ -160,6 +168,9 @@ class BannerController extends Controller
             'link' => $request->link,
             'active' => $request->has('active') ? $request->active : $banner->active
         ]);
+
+        // Clear the banners cache when a banner is updated
+        Cache::forget('admin.banners');
 
         // Transform the banner for response
         $transformedBanner = [
@@ -229,6 +240,9 @@ class BannerController extends Controller
             $banner->is_active = !$banner->is_active;
             $banner->save();
             
+            // Clear the banners cache when a banner's status is toggled
+            Cache::forget('admin.banners');
+
             return response()->json([
                 'status' => 'success',
                 'message' => 'Banner status toggled successfully',
@@ -241,5 +255,43 @@ class BannerController extends Controller
                 'error' => $e->getMessage()
             ], 500);
         }
+    }
+
+    /**
+     * Get all active banners for public display.
+     * This endpoint is cached to improve performance.
+     *
+     * @return \Illuminate\Http\JsonResponse
+     */
+    public function getActiveBanners()
+    {
+        // Cache active banners for 5 minutes
+        $banners = Cache::remember('public.banners', 300, function () {
+            return Banner::where('active', true)
+                        ->orderBy('created_at', 'desc')
+                        ->get();
+        });
+
+        // Transform banners to match frontend expectations
+        $transformedBanners = $banners->map(function ($banner) {
+            return [
+                'id' => $banner->id,
+                'label' => $banner->label,
+                'title' => $banner->title,
+                'description' => $banner->description,
+                'image' => $banner->image,
+                'bgColor' => $banner->bg_color,
+                'imgBgColor' => $banner->img_bg_color,
+                'link' => $banner->link,
+                'active' => (bool)$banner->active,
+                'createdAt' => $banner->created_at,
+                'updatedAt' => $banner->updated_at
+            ];
+        });
+
+        return response()->json([
+            'status' => 'success',
+            'banners' => $transformedBanners
+        ]);
     }
 }

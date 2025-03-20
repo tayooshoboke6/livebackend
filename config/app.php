@@ -173,6 +173,8 @@ return [
         App\Providers\RouteServiceProvider::class,
         App\Providers\FlutterwaveServiceProvider::class,
         App\Providers\BrevoServiceProvider::class,
+        App\Providers\OptimizationServiceProvider::class,
+        App\Providers\DatabaseServiceProvider::class,
     ],
 
 ];

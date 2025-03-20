@@ -216,12 +216,249 @@ class CartController extends Controller
     }
     
     /**
-     * Save the user's cart data for frontend persistence.
+     * Replace the user's entire cart with new items.
+     * Optimized for performance with caching.
      *
      * @param  \Illuminate\Http\Request  $request
      * @return \Illuminate\Http\Response
      */
-    public function saveUserCart(Request $request)
+    public function replaceCart(Request $request)
+    {
+        $user = $request->user();
+        
+        $validator = Validator::make($request->all(), [
+            'items' => 'required|array',
+        ]);
+        
+        if ($validator->fails()) {
+            return response()->json([
+                'status' => 'error',
+                'message' => 'Invalid cart data',
+                'errors' => $validator->errors(),
+            ], 422);
+        }
+        
+        // Check if the cart data is actually different to avoid unnecessary DB writes
+        $currentCartData = $user->cart_data ? json_decode($user->cart_data, true) : [];
+        $newCartData = $request->items;
+        
+        // Simple hash comparison to avoid unnecessary updates
+        $currentHash = md5(json_encode($currentCartData));
+        $newHash = md5(json_encode($newCartData));
+        
+        if ($currentHash === $newHash) {
+            // Cart hasn't changed, return success without DB write
+            return response()->json([
+                'status' => 'success',
+                'message' => 'Cart unchanged',
+                'cached' => true
+            ]);
+        }
+        
+        // Save cart data to user record using a more efficient update
+        // This avoids loading the entire user model when we only need to update one field
+        \DB::table('users')
+            ->where('id', $user->id)
+            ->update(['cart_data' => json_encode($request->items)]);
+        
+        return response()->json([
+            'status' => 'success',
+            'message' => 'Cart replaced successfully',
+        ]);
+    }
+    
+    /**
+     * Add a single item to the user's cart.
+     *
+     * @param  \Illuminate\Http\Request  $request
+     * @return \Illuminate\Http\Response
+     */
+    public function addCartItem(Request $request)
+    {
+        $user = $request->user();
+        
+        $validator = Validator::make($request->all(), [
+            'item' => 'required|array',
+            'item.id' => 'required|numeric',
+            'item.quantity' => 'required|numeric|min:1',
+        ]);
+        
+        if ($validator->fails()) {
+            return response()->json([
+                'status' => 'error',
+                'message' => 'Invalid item data',
+                'errors' => $validator->errors(),
+            ], 422);
+        }
+        
+        $newItem = $request->item;
+        $currentCart = [];
+        
+        if ($user->cart_data) {
+            $currentCart = json_decode($user->cart_data, true);
+        }
+        
+        // Check if item already exists in cart
+        $itemExists = false;
+        foreach ($currentCart as &$cartItem) {
+            if ($cartItem['id'] == $newItem['id']) {
+                // Update quantity
+                $cartItem['quantity'] += $newItem['quantity'];
+                $itemExists = true;
+                break;
+            }
+        }
+        
+        // If item doesn't exist, add it
+        if (!$itemExists) {
+            $currentCart[] = $newItem;
+        }
+        
+        // Save updated cart
+        $user->cart_data = json_encode($currentCart);
+        $user->save();
+        
+        return response()->json([
+            'status' => 'success',
+            'message' => 'Item added to cart successfully',
+            'data' => $currentCart,
+        ]);
+    }
+    
+    /**
+     * Remove an item from the user's cart.
+     *
+     * @param  \Illuminate\Http\Request  $request
+     * @return \Illuminate\Http\Response
+     */
+    public function removeCartItem(Request $request)
+    {
+        $user = $request->user();
+        
+        $validator = Validator::make($request->all(), [
+            'id' => 'required|numeric',
+        ]);
+        
+        if ($validator->fails()) {
+            return response()->json([
+                'status' => 'error',
+                'message' => 'Invalid item ID',
+                'errors' => $validator->errors(),
+            ], 422);
+        }
+        
+        $itemId = $request->id;
+        $currentCart = [];
+        
+        if ($user->cart_data) {
+            $currentCart = json_decode($user->cart_data, true);
+        }
+        
+        // Filter out the item to remove
+        $updatedCart = array_filter($currentCart, function($item) use ($itemId) {
+            return $item['id'] != $itemId;
+        });
+        
+        // Reindex array
+        $updatedCart = array_values($updatedCart);
+        
+        // Save updated cart
+        $user->cart_data = json_encode($updatedCart);
+        $user->save();
+        
+        return response()->json([
+            'status' => 'success',
+            'message' => 'Item removed from cart successfully',
+            'data' => $updatedCart,
+        ]);
+    }
+    
+    /**
+     * Update the quantity of an item in the user's cart.
+     *
+     * @param  \Illuminate\Http\Request  $request
+     * @return \Illuminate\Http\Response
+     */
+    public function updateCartItem(Request $request)
+    {
+        $user = $request->user();
+        
+        $validator = Validator::make($request->all(), [
+            'id' => 'required|numeric',
+            'quantity' => 'required|numeric|min:1',
+        ]);
+        
+        if ($validator->fails()) {
+            return response()->json([
+                'status' => 'error',
+                'message' => 'Invalid update data',
+                'errors' => $validator->errors(),
+            ], 422);
+        }
+        
+        $itemId = $request->id;
+        $newQuantity = $request->quantity;
+        $currentCart = [];
+        
+        if ($user->cart_data) {
+            $currentCart = json_decode($user->cart_data, true);
+        }
+        
+        // Update the quantity of the specified item
+        $itemFound = false;
+        foreach ($currentCart as &$item) {
+            if ($item['id'] == $itemId) {
+                $item['quantity'] = $newQuantity;
+                $itemFound = true;
+                break;
+            }
+        }
+        
+        if (!$itemFound) {
+            return response()->json([
+                'status' => 'error',
+                'message' => 'Item not found in cart',
+            ], 404);
+        }
+        
+        // Save updated cart
+        $user->cart_data = json_encode($currentCart);
+        $user->save();
+        
+        return response()->json([
+            'status' => 'success',
+            'message' => 'Item quantity updated successfully',
+            'data' => $currentCart,
+        ]);
+    }
+    
+    /**
+     * Clear all items from the user's cart.
+     *
+     * @param  \Illuminate\Http\Request  $request
+     * @return \Illuminate\Http\Response
+     */
+    public function clearUserCart(Request $request)
+    {
+        $user = $request->user();
+        
+        // Clear cart data
+        $user->cart_data = json_encode([]);
+        $user->save();
+        
+        return response()->json([
+            'status' => 'success',
+            'message' => 'Cart cleared successfully',
+        ]);
+    }
+    
+    /**
+     * Initialize the user's cart from local storage after login.
+     *
+     * @param  \Illuminate\Http\Request  $request
+     * @return \Illuminate\Http\Response
+     */
+    public function initializeFromLocal(Request $request)
     {
         $user = $request->user();
         
@@ -243,7 +480,19 @@ class CartController extends Controller
         
         return response()->json([
             'status' => 'success',
-            'message' => 'Cart saved successfully',
+            'message' => 'Cart initialized successfully',
         ]);
+    }
+    
+    /**
+     * Save the user's cart data for frontend persistence.
+     * @deprecated Use replaceCart instead
+     *
+     * @param  \Illuminate\Http\Request  $request
+     * @return \Illuminate\Http\Response
+     */
+    public function saveUserCart(Request $request)
+    {
+        return $this->replaceCart($request);
     }
 }

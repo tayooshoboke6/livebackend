@@ -199,27 +199,51 @@ class AuthController extends Controller
      * @param  \Illuminate\Http\Request  $request
      * @return \Illuminate\Http\Response
      */
-    public function refreshToken(Request $request)
+    public function refresh(Request $request)
     {
-        // Get the authenticated user
-        $user = $request->user();
-        
-        if (!$user) {
+        try {
+            // Get token from Authorization header
+            $token = str_replace('Bearer ', '', $request->header('Authorization'));
+            
+            if (!$token) {
+                return response()->json([
+                    'message' => 'No token provided'
+                ], 401);
+            }
+
+            // Find the token in the database
+            $tokenModel = \Laravel\Sanctum\PersonalAccessToken::findToken($token);
+            
+            if (!$tokenModel) {
+                return response()->json([
+                    'message' => 'Invalid token'
+                ], 401);
+            }
+
+            $user = $tokenModel->tokenable;
+            
+            if (!$user) {
+                return response()->json([
+                    'message' => 'User not found'
+                ], 401);
+            }
+
+            // Delete the old token
+            $tokenModel->delete();
+            
+            // Create new token
+            $newToken = $user->createToken('auth_token')->plainTextToken;
+            
             return response()->json([
-                'message' => 'Unauthenticated'
+                'message' => 'Token refreshed successfully',
+                'user' => $user,
+                'token' => $newToken,
+            ]);
+        } catch (\Exception $e) {
+            return response()->json([
+                'message' => 'Token refresh failed',
+                'error' => $e->getMessage()
             ], 401);
         }
-        
-        // Revoke all existing tokens
-        $user->tokens()->delete();
-        
-        // Create a new token
-        $token = $user->createToken('auth_token')->plainTextToken;
-        
-        return response()->json([
-            'message' => 'Token refreshed successfully',
-            'token' => $token,
-            'user' => $user
-        ]);
     }
 }

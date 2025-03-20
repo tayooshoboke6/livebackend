@@ -3,10 +3,13 @@
 namespace App\Http\Controllers;
 
 use App\Models\Category;
+use App\Models\Product;
 use Illuminate\Http\Request;
-use Illuminate\Support\Facades\Validator;
 use Illuminate\Support\Facades\Cache;
+use Illuminate\Support\Facades\Log;
+use Illuminate\Support\Facades\Validator;
 use Illuminate\Support\Str;
+use App\Services\CacheService;
 
 class CategoryController extends Controller
 {
@@ -18,19 +21,43 @@ class CategoryController extends Controller
      */
     public function index(Request $request)
     {
-        $query = Category::with('subcategories')
-            ->when($request->boolean('parents_only', false), function ($q) {
-                return $q->whereNull('parent_id');
-            });
+        try {
+            $isAdmin = $request->user() && $request->user()->hasRole('admin');
+            
+            // Get main categories first
+            $query = Category::query()
+                ->when(!$isAdmin, function ($q) {
+                    return $q->where('is_active', true);
+                });
 
-        // Default to active categories for non-admin users
-        if (!$request->has('include_inactive') || !$request->user() || !$request->user()->hasRole('admin')) {
-            $query->where('is_active', true);
+            // If we want only main categories
+            if ($request->boolean('main_only', false)) {
+                $query->whereNull('parent_id');
+            } else {
+                // Load main categories with their immediate subcategories
+                $query->whereNull('parent_id')
+                    ->with(['subcategories' => function($q) use ($isAdmin) {
+                        if (!$isAdmin) {
+                            $q->where('is_active', true);
+                        }
+                    }]);
+            }
+
+            $categories = $query->orderBy('order')->orderBy('name')->get();
+
+            return response()->json([
+                'success' => true,
+                'message' => 'Categories retrieved successfully',
+                'categories' => $categories
+            ]);
+        } catch (\Exception $e) {
+            Log::error('Error fetching categories: ' . $e->getMessage());
+            return response()->json([
+                'success' => false,
+                'message' => 'Failed to fetch categories',
+                'error' => $e->getMessage()
+            ], 500);
         }
-
-        $categories = $query->orderBy('order')->orderBy('name')->get();
-
-        return response()->json($categories);
     }
 
     /**
@@ -41,45 +68,128 @@ class CategoryController extends Controller
      */
     public function store(Request $request)
     {
-        $validator = Validator::make($request->all(), [
-            'name' => 'required|string|max:255',
-            'description' => 'nullable|string',
-            'parent_id' => 'nullable|exists:categories,id',
-            'image' => 'nullable|string',
-            'is_active' => 'boolean',
-            'is_featured' => 'boolean',
-            'color' => 'nullable|string|max:20',
-        ]);
+        try {
+            $validator = Validator::make($request->all(), [
+                'name' => 'required|string|max:255',
+                'description' => 'nullable|string',
+                'parent_id' => [
+                    'nullable',
+                    'exists:categories,id',
+                    function ($attribute, $value, $fail) {
+                        if ($value !== null) {
+                            // Check if the parent is a main category (has no parent)
+                            $parent = Category::find($value);
+                            if ($parent && $parent->parent_id !== null) {
+                                $fail('Subcategories cannot have subcategories. Only main categories can have subcategories.');
+                            }
+                        }
+                    },
+                ],
+                'image' => 'nullable|image|max:2048',
+                'is_active' => 'boolean',
+                'is_featured' => 'boolean',
+                'order' => 'integer|min:0',
+                'color' => 'nullable|string|max:7'
+            ]);
 
-        if ($validator->fails()) {
-            return response()->json(['errors' => $validator->errors()], 422);
+            if ($validator->fails()) {
+                return response()->json([
+                    'success' => false,
+                    'message' => 'Validation failed',
+                    'errors' => $validator->errors()
+                ], 422);
+            }
+
+            $category = new Category($request->all());
+            
+            if ($request->hasFile('image')) {
+                $path = $request->file('image')->store('categories', 'public');
+                $category->image = $path;
+            }
+
+            $category->save();
+
+            return response()->json([
+                'success' => true,
+                'message' => 'Category created successfully',
+                'category' => $category
+            ], 201);
+        } catch (\Exception $e) {
+            Log::error('Error creating category: ' . $e->getMessage());
+            return response()->json([
+                'success' => false,
+                'message' => 'Failed to create category',
+                'error' => $e->getMessage()
+            ], 500);
         }
+    }
 
-        // Generate slug from name
-        $slug = Str::slug($request->name);
-        $originalSlug = $slug;
-        $count = 1;
+    /**
+     * Update the specified category in storage.
+     *
+     * @param  \Illuminate\Http\Request  $request
+     * @param  int  $id
+     * @return \Illuminate\Http\Response
+     */
+    public function update(Request $request, Category $category)
+    {
+        try {
+            $validator = Validator::make($request->all(), [
+                'name' => 'sometimes|required|string|max:255',
+                'description' => 'nullable|string',
+                'parent_id' => [
+                    'nullable',
+                    'exists:categories,id',
+                    function ($attribute, $value, $fail) use ($category) {
+                        if ($value !== null) {
+                            // Check if the parent is a main category
+                            $parent = Category::find($value);
+                            if ($parent && $parent->parent_id !== null) {
+                                $fail('Subcategories cannot have subcategories. Only main categories can have subcategories.');
+                            }
+                            
+                            // Check if this category has subcategories
+                            if ($category->subcategories()->exists()) {
+                                $fail('Cannot make a main category with subcategories into a subcategory.');
+                            }
+                        }
+                    },
+                ],
+                'image' => 'nullable|image|max:2048',
+                'is_active' => 'boolean',
+                'is_featured' => 'boolean',
+                'order' => 'integer|min:0',
+                'color' => 'nullable|string|max:7'
+            ]);
 
-        // Ensure slug is unique
-        while (Category::where('slug', $slug)->exists()) {
-            $slug = $originalSlug . '-' . $count++;
+            if ($validator->fails()) {
+                return response()->json([
+                    'success' => false,
+                    'message' => 'Validation failed',
+                    'errors' => $validator->errors()
+                ], 422);
+            }
+
+            if ($request->hasFile('image')) {
+                $path = $request->file('image')->store('categories', 'public');
+                $category->image = $path;
+            }
+
+            $category->update($request->except('image'));
+
+            return response()->json([
+                'success' => true,
+                'message' => 'Category updated successfully',
+                'category' => $category
+            ]);
+        } catch (\Exception $e) {
+            Log::error('Error updating category: ' . $e->getMessage());
+            return response()->json([
+                'success' => false,
+                'message' => 'Failed to update category',
+                'error' => $e->getMessage()
+            ], 500);
         }
-
-        $category = Category::create([
-            'name' => $request->name,
-            'slug' => $slug,
-            'description' => $request->description,
-            'parent_id' => $request->parent_id,
-            'image' => $request->image,
-            'is_active' => $request->boolean('is_active', true),
-            'is_featured' => $request->boolean('is_featured', false),
-            'color' => $request->input('color', '#000000'),
-        ]);
-
-        return response()->json([
-            'message' => 'Category created successfully',
-            'category' => $category,
-        ], 201);
     }
 
     /**
@@ -96,62 +206,6 @@ class CategoryController extends Controller
             : Category::with('subcategories')->where('slug', $id)->firstOrFail();
 
         return response()->json($category);
-    }
-
-    /**
-     * Update the specified category in storage.
-     *
-     * @param  \Illuminate\Http\Request  $request
-     * @param  int  $id
-     * @return \Illuminate\Http\Response
-     */
-    public function update(Request $request, $id)
-    {
-        $category = Category::findOrFail($id);
-
-        $validator = Validator::make($request->all(), [
-            'name' => 'sometimes|string|max:255',
-            'description' => 'nullable|string',
-            'parent_id' => 'nullable|exists:categories,id',
-            'image' => 'nullable|string',
-            'is_active' => 'boolean',
-            'is_featured' => 'boolean',
-            'color' => 'nullable|string|max:20',
-        ]);
-
-        if ($validator->fails()) {
-            return response()->json(['errors' => $validator->errors()], 422);
-        }
-
-        // Update slug if name changes
-        if ($request->has('name') && $request->name !== $category->name) {
-            $slug = Str::slug($request->name);
-            $originalSlug = $slug;
-            $count = 1;
-
-            // Ensure slug is unique
-            while (Category::where('slug', $slug)->where('id', '!=', $category->id)->exists()) {
-                $slug = $originalSlug . '-' . $count++;
-            }
-
-            $request->merge(['slug' => $slug]);
-        }
-
-        // Prevent category from being its own parent
-        if ($request->has('parent_id') && $request->parent_id == $category->id) {
-            return response()->json([
-                'message' => 'Category cannot be its own parent',
-            ], 422);
-        }
-
-        $category->update($request->only([
-            'name', 'slug', 'description', 'parent_id', 'image', 'is_active', 'is_featured', 'color',
-        ]));
-
-        return response()->json([
-            'message' => 'Category updated successfully',
-            'category' => $category->fresh('subcategories'),
-        ]);
     }
 
     /**
@@ -206,10 +260,10 @@ class CategoryController extends Controller
                     ->orWhere('description', 'like', '%' . $request->search . '%');
             })
             ->when($request->has('min_price'), function ($q) use ($request) {
-                return $q->where('price', '>=', $request->min_price);
+                return $q->where('base_price', '>=', $request->min_price);
             })
             ->when($request->has('max_price'), function ($q) use ($request) {
-                return $q->where('price', '<=', $request->max_price);
+                return $q->where('base_price', '<=', $request->max_price);
             });
 
         // Default to active products for non-admin users
@@ -246,42 +300,70 @@ class CategoryController extends Controller
      * @return \Illuminate\Http\Response
      */
     public function tree(Request $request)
-{
-    $includeInactive = $request->has('include_inactive') && $request->user() && $request->user()->hasRole('admin');
-    $cacheKey = 'categories.tree.' . ($includeInactive ? 'with_inactive' : 'active_only');
-    
-    
-    $categoriesData = Cache::remember($cacheKey, 60 * 24, function () use ($includeInactive) {
-      
-        $categories = Category::with(['subcategories' => function($query) use ($includeInactive) {
-           
-            if (!$includeInactive) {
-                $query->where('is_active', true);
-            }
-            $query->orderBy('name');
-        }])
-        ->whereNull('parent_id')
-        ->when(!$includeInactive, function ($query) {
-            return $query->where('is_active', true);
-        })
-        ->orderBy('name')
-        ->get();
-
-        
-        $categoriesTree = $this->buildOptimizedCategoryTree($categories);
-        
-       
-        return [
-            'categories' => $categoriesTree,
-            'timestamp' => now()->toIso8601String(),
-            'total_count' => count($categoriesTree),
-            'cached' => true
-        ];
-    });
-    
-   
-    return response()->json($categoriesData);
-}           
+    {
+        try {
+            // Simple approach: directly query the database without caching
+            // This avoids all caching issues while we fix the underlying problem
+            $includeInactive = $request->has('include_inactive') && $request->user() && $request->user()->hasRole('admin');
+            
+            // Log the request for debugging
+            \Log::info('Category tree request received', [
+                'include_inactive' => $includeInactive,
+                'user_is_admin' => $request->user() && $request->user()->hasRole('admin')
+            ]);
+            
+            $categories = Category::with(['subcategories' => function($query) use ($includeInactive) {
+                if (!$includeInactive) {
+                    $query->where('is_active', true);
+                }
+                $query->orderBy('name');
+            }])
+            ->whereNull('parent_id')
+            ->when(!$includeInactive, function ($query) {
+                return $query->where('is_active', true);
+            })
+            ->orderBy('name')
+            ->get();
+            
+            // Log the categories found
+            \Log::info('Categories found for tree', [
+                'count' => $categories->count(),
+                'first_category' => $categories->count() > 0 ? $categories->first()->toArray() : null,
+                'all_categories' => $categories->toArray() // Log all categories for debugging
+            ]);
+            
+            $categoriesTree = $this->buildOptimizedCategoryTree($categories);
+            
+            // Log the optimized tree
+            \Log::info('Optimized category tree built', [
+                'count' => count($categoriesTree),
+                'first_category' => count($categoriesTree) > 0 ? $categoriesTree[0] : null,
+                'all_categories' => $categoriesTree // Log all categories in the tree
+            ]);
+            
+            // Return the data directly without nesting it in a "data" property
+            return response()->json([
+                'status' => 'success',
+                'data' => $categoriesTree,
+                'timestamp' => now()->toIso8601String(),
+                'total_count' => count($categoriesTree),
+                'cached' => false
+            ])
+            ->header('Cache-Control', 'no-store, no-cache, must-revalidate, max-age=0')
+            ->header('Pragma', 'no-cache')
+            ->header('Expires', 'Sat, 01 Jan 2000 00:00:00 GMT');
+        } catch (\Exception $e) {
+            \Log::error('Category tree error: ' . $e->getMessage(), [
+                'exception' => $e,
+                'trace' => $e->getTraceAsString()
+            ]);
+            return response()->json([
+                'message' => 'Failed to retrieve category tree',
+                'error' => $e->getMessage(),
+                'status' => 'error'
+            ], 500);
+        }
+    }
 
     /**
      * Build an optimized category tree using eager loaded data.
@@ -320,42 +402,113 @@ class CategoryController extends Controller
     }
 
     /**
-     * Recursively build a category tree with all descendants.
-     * 
-     * @deprecated Use buildOptimizedCategoryTree instead
-     * @param  \Illuminate\Database\Eloquent\Collection  $categories
-     * @return array
+     * Get product counts for multiple categories in a single batch request
+     * This reduces the N+1 query problem on the frontend
+     *
+     * @param  \Illuminate\Http\Request  $request
+     * @return \Illuminate\Http\Response
      */
-    private function buildCategoryTree($categories)
+    public function batchProductCounts(Request $request)
     {
-        $result = [];
+        // Validate the request
+        $validator = Validator::make($request->all(), [
+            'category_ids' => 'required|string',
+        ]);
 
-        foreach ($categories as $category) {
-            // Get all subcategories
-            $subcategories = Category::where('parent_id', $category->id)
-                ->where('is_active', true)
-                ->orderBy('name')
-                ->get();
-
-            // Build category data with its children
-            $categoryData = [
-                'id' => $category->id,
-                'name' => $category->name,
-                'slug' => $category->slug,
-                'description' => $category->description,
-                'image' => $category->image,
-                'is_active' => $category->is_active,
-                'children' => []
-            ];
-
-            // Recursively add subcategories if they exist
-            if ($subcategories->count() > 0) {
-                $categoryData['children'] = $this->buildCategoryTree($subcategories);
-            }
-
-            $result[] = $categoryData;
+        if ($validator->fails()) {
+            return response()->json([
+                'success' => false,
+                'message' => 'Invalid category IDs',
+                'errors' => $validator->errors()
+            ], 400);
         }
 
-        return $result;
+        // Parse the category IDs
+        $categoryIds = array_map('intval', explode(',', $request->category_ids));
+        
+        if (empty($categoryIds)) {
+            return response()->json([
+                'success' => true,
+                'product_counts' => []
+            ]);
+        }
+
+        // Generate a cache key based on the category IDs
+        $cacheKey = 'category_product_counts_' . md5(implode(',', $categoryIds));
+        
+        // Try to get from cache first (5 minute cache)
+        if (Cache::has($cacheKey)) {
+            return response()->json([
+                'success' => true,
+                'product_counts' => Cache::get($cacheKey),
+                'from_cache' => true
+            ]);
+        }
+
+        // If not in cache, fetch from database
+        $productCounts = [];
+        
+        // Use a more efficient query to get product counts for all categories at once
+        $categoryCounts = \DB::table('products')
+            ->select('category_id', \DB::raw('count(*) as count'))
+            ->whereIn('category_id', $categoryIds)
+            ->where('is_active', true)
+            ->groupBy('category_id')
+            ->get();
+            
+        // Format the results into a map of category ID to count
+        foreach ($categoryCounts as $count) {
+            $productCounts[$count->category_id] = $count->count;
+        }
+        
+        // Add zero counts for categories with no products
+        foreach ($categoryIds as $categoryId) {
+            if (!isset($productCounts[$categoryId])) {
+                $productCounts[$categoryId] = 0;
+            }
+        }
+        
+        // Cache the results for 5 minutes
+        Cache::put($cacheKey, $productCounts, now()->addMinutes(5));
+        
+        return response()->json([
+            'success' => true,
+            'product_counts' => $productCounts
+        ]);
+    }
+
+    /**
+     * Get a hierarchical tree of categories
+     *
+     * @return \Illuminate\Http\Response
+     */
+    public function getCategoryTree()
+    {
+        try {
+            // Direct database query without caching to avoid tagging issues
+            $categories = $this->buildOptimizedCategoryTree(
+                Category::with(['subcategories' => function($query) {
+                    $query->where('is_active', true)
+                          ->orderBy('name');
+                }])
+                ->whereNull('parent_id')
+                ->where('is_active', true)
+                ->orderBy('name')
+                ->get()
+            );
+            
+            return response()->json([
+                'categories' => $categories,
+                'timestamp' => now()->toIso8601String(),
+                'total_count' => count($categories),
+                'cached' => false
+            ]);
+        } catch (\Exception $e) {
+            \Log::error('Category tree error: ' . $e->getMessage());
+            return response()->json([
+                'message' => 'Failed to retrieve category tree',
+                'error' => $e->getMessage()
+            ], 500);
+        }
     }
 }
