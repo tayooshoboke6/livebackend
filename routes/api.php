@@ -150,6 +150,11 @@ Route::middleware(['auth:sanctum', \App\Http\Middleware\CheckRole::class . ':adm
     Route::get('/dashboard/stats', [DashboardController::class, 'getStats']);
     Route::get('/dashboard/recent-orders', [DashboardController::class, 'getRecentOrders']);
     
+    // Settings Management
+    Route::get('/settings', [\App\Http\Controllers\Admin\SettingsController::class, 'index']);
+    Route::put('/settings', [\App\Http\Controllers\Admin\SettingsController::class, 'update']);
+    Route::get('/settings/{key}', [\App\Http\Controllers\Admin\SettingsController::class, 'show']);
+    
     // Delivery Settings
     Route::get('/delivery-settings/global', [App\Http\Controllers\Admin\DeliverySettingsController::class, 'getGlobalSettings']);
     Route::put('/delivery-settings/global', [App\Http\Controllers\Admin\DeliverySettingsController::class, 'updateGlobalSettings']);
