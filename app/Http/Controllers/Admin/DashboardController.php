@@ -149,11 +149,22 @@ class DashboardController extends Controller
                     
                     // Map the results to match the expected format in the frontend
                     $lowStockProducts = $lowStockProducts->map(function($product) {
+                        // Try to get the product image if available
+                        $image = null;
+                        try {
+                            $productWithImage = \App\Models\Product::with('images')->find($product->id);
+                            if ($productWithImage && $productWithImage->images && $productWithImage->images->count() > 0) {
+                                $image = $productWithImage->images->first()->url;
+                            }
+                        } catch (\Exception $e) {
+                            \Log::error('Error getting product image: ' . $e->getMessage());
+                        }
+                        
                         return [
                             'id' => $product->id,
                             'name' => $product->name,
                             'stock' => $product->stock,
-                            'image' => null, // Add default image if available
+                            'image' => $image,
                             'min_stock' => 5  // Default minimum stock threshold
                         ];
                     })->toArray();
