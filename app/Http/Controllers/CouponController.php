@@ -296,4 +296,30 @@ class CouponController extends Controller
             'message' => 'Coupon is valid',
         ]);
     }
+
+    /**
+     * Toggle the active status of a coupon.
+     *
+     * @param  int  $coupon
+     * @return \Illuminate\Http\Response
+     */
+    public function toggleStatus($coupon)
+    {
+        try {
+            $coupon = Coupon::findOrFail($coupon);
+            $coupon->is_active = !$coupon->is_active;
+            $coupon->save();
+            
+            return response()->json([
+                'status' => 'success',
+                'message' => 'Coupon status toggled successfully',
+                'data' => $coupon->fresh()
+            ]);
+        } catch (\Exception $e) {
+            return response()->json([
+                'status' => 'error',
+                'message' => 'Failed to toggle coupon status: ' . $e->getMessage()
+            ], 500);
+        }
+    }
 }

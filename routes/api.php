@@ -143,10 +143,6 @@ Route::middleware(['auth:sanctum', \App\Http\Middleware\CheckRole::class . ':adm
             'message' => 'Admin authentication successful',
             'user' => $request->user(),
             'is_admin' => $request->user()->role === 'admin',
-        ])->withHeaders([
-            'Cache-Control' => 'no-cache, no-store, must-revalidate',
-            'Pragma' => 'no-cache',
-            'Expires' => '0'
         ]);
     });
     
@@ -180,31 +176,11 @@ Route::middleware(['auth:sanctum', \App\Http\Middleware\CheckRole::class . ':adm
     Route::put('/notification-bar/toggle-status', [AdminNotificationBarController::class, 'toggleStatus']);
     
     // Product Management
-    Route::get('/products', [ProductController::class, 'index'])->withHeaders([
-        'Cache-Control' => 'no-cache, no-store, must-revalidate',
-        'Pragma' => 'no-cache',
-        'Expires' => '0'
-    ]);
-    Route::get('/products/{product}', [ProductController::class, 'show'])->withHeaders([
-        'Cache-Control' => 'no-cache, no-store, must-revalidate',
-        'Pragma' => 'no-cache',
-        'Expires' => '0'
-    ]);
-    Route::post('/products', [ProductController::class, 'store'])->withHeaders([
-        'Cache-Control' => 'no-cache, no-store, must-revalidate',
-        'Pragma' => 'no-cache',
-        'Expires' => '0'
-    ]);
-    Route::put('/products/{product}', [ProductController::class, 'update'])->withHeaders([
-        'Cache-Control' => 'no-cache, no-store, must-revalidate',
-        'Pragma' => 'no-cache',
-        'Expires' => '0'
-    ]);
-    Route::delete('/products/{product}', [ProductController::class, 'destroy'])->withHeaders([
-        'Cache-Control' => 'no-cache, no-store, must-revalidate',
-        'Pragma' => 'no-cache',
-        'Expires' => '0'
-    ]);
+    Route::get('/products', [ProductController::class, 'index']);
+    Route::get('/products/{product}', [ProductController::class, 'show']);
+    Route::post('/products', [ProductController::class, 'store']);
+    Route::put('/products/{product}', [ProductController::class, 'update']);
+    Route::delete('/products/{product}', [ProductController::class, 'destroy']);
     
     // Category Management
     Route::get('/categories/stock-data', [\App\Http\Controllers\Admin\CategoryAdminController::class, 'getCategoryStockData']);
@@ -223,6 +199,7 @@ Route::middleware(['auth:sanctum', \App\Http\Middleware\CheckRole::class . ':adm
     Route::post('/coupons', [CouponController::class, 'store']);
     Route::put('/coupons/{coupon}', [CouponController::class, 'update']);
     Route::delete('/coupons/{coupon}', [CouponController::class, 'destroy']);
+    Route::patch('/coupons/{coupon}/toggle-status', [CouponController::class, 'toggleStatus']);
     
     // Product Section Management
     Route::get('/product-sections', [\App\Http\Controllers\Admin\ProductSectionController::class, 'index']);
