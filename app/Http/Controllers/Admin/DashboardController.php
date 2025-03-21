@@ -155,15 +155,22 @@ class DashboardController extends Controller
                             $productWithImage = \App\Models\Product::with('images')->find($product->id);
                             if ($productWithImage && $productWithImage->images && $productWithImage->images->count() > 0) {
                                 $image = $productWithImage->images->first()->url;
+                            } elseif ($productWithImage && $productWithImage->image_url) {
+                                // Also check for image_url field
+                                $image = $productWithImage->image_url;
+                            } elseif ($productWithImage && $productWithImage->image) {
+                                // Also check for image field
+                                $image = $productWithImage->image;
                             }
                         } catch (\Exception $e) {
                             \Log::error('Error getting product image: ' . $e->getMessage());
                         }
                         
+                        // Standardize field names to match frontend expectations
                         return [
                             'id' => $product->id,
                             'name' => $product->name,
-                            'stock' => $product->stock,
+                            'stock' => $product->stock, // Already mapped in the query with "as stock"
                             'image' => $image,
                             'min_stock' => 5  // Default minimum stock threshold
                         ];
