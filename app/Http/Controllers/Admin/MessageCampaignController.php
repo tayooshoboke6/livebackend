@@ -308,6 +308,56 @@ class MessageCampaignController extends Controller
     }
 
     /**
+     * Get available user segments for message campaigns.
+     *
+     * @return \Illuminate\Http\JsonResponse
+     */
+    public function getSegments()
+    {
+        try {
+            // Define standard user segments
+            $segments = [
+                [
+                    'id' => '1',
+                    'userSegment' => 'all',
+                    'name' => 'All Users'
+                ],
+                [
+                    'id' => '2',
+                    'userSegment' => 'premium',
+                    'name' => 'Premium Users'
+                ],
+                [
+                    'id' => '3',
+                    'userSegment' => 'new_users',
+                    'name' => 'New Users (Last 30 Days)'
+                ],
+                [
+                    'id' => '4',
+                    'userSegment' => 'inactive',
+                    'name' => 'Inactive Users (90+ Days)'
+                ],
+                [
+                    'id' => '5',
+                    'userSegment' => 'frequent_shoppers',
+                    'name' => 'Frequent Shoppers'
+                ]
+            ];
+            
+            return response()->json([
+                'status' => 'success',
+                'data' => $segments
+            ]);
+        } catch (\Exception $e) {
+            Log::error('Error fetching user segments: ' . $e->getMessage());
+            return response()->json([
+                'status' => 'error',
+                'message' => 'Failed to fetch user segments'
+            ], 500);
+        }
+    }
+
+    /**
      * Get available user segments.
      */
     public function getUserSegments()

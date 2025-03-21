@@ -42,13 +42,49 @@ class UserController extends Controller
                 $query->where('is_active', $status);
             }
             
+            // Add activity level filtering
+            if ($request->has('activity') && $request->activity) {
+                $activityLevel = $request->activity;
+                
+                try {
+                    // Use updated_at as a fallback for activity level since last_login_at might not exist
+                    if ($activityLevel === 'high') {
+                        // High activity: active within the last 7 days
+                        $query->where('updated_at', '>=', now()->subDays(7));
+                    } elseif ($activityLevel === 'medium') {
+                        // Medium activity: active between 7 and 30 days ago
+                        $query->where('updated_at', '>=', now()->subDays(30))
+                              ->where('updated_at', '<', now()->subDays(7));
+                    } elseif ($activityLevel === 'low') {
+                        // Low activity: not active for more than 30 days
+                        $query->where('updated_at', '<', now()->subDays(30));
+                    }
+                } catch (\Exception $e) {
+                    \Log::error('Error filtering by activity level: ' . $e->getMessage());
+                    // If there's an error, don't apply the filter
+                }
+            }
+            
             // Pagination
-            $perPage = $request->input('limit', 10);
+            $perPage = $request->input('per_page', 10);
             $page = $request->input('page', 1);
             
             // Sorting
-            $sortBy = $request->input('sortBy', 'created_at');
-            $sortOrder = $request->input('sortOrder', 'desc');
+            $sortBy = $request->input('sort_by', 'created_at');
+            $sortOrder = $request->input('sort_order', 'desc');
+            
+            // Log the query parameters for debugging
+            \Log::info('User query parameters:', [
+                'page' => $page,
+                'per_page' => $perPage,
+                'sort_by' => $sortBy,
+                'sort_order' => $sortOrder,
+                'role' => $request->role,
+                'status' => $request->status,
+                'activity' => $request->activity,
+                'search' => $request->search
+            ]);
+            
             $query->orderBy($sortBy, $sortOrder);
             
             $users = $query->paginate($perPage, ['*'], 'page', $page);

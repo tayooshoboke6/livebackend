@@ -228,6 +228,7 @@ Route::middleware(['auth:sanctum', \App\Http\Middleware\CheckRole::class . ':adm
     // Message Campaigns
     Route::get('/messages/campaigns', [MessageCampaignController::class, 'index']);
     Route::post('/messages/campaigns', [MessageCampaignController::class, 'store']);
+    Route::get('/messages/campaigns/segments', [MessageCampaignController::class, 'getSegments']);
     Route::get('/messages/campaigns/{id}', [MessageCampaignController::class, 'show']);
     Route::put('/messages/campaigns/{id}', [MessageCampaignController::class, 'update']);
     Route::delete('/messages/campaigns/{id}', [MessageCampaignController::class, 'destroy']);
