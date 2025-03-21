@@ -9,6 +9,7 @@ use App\Models\Product;
 use App\Models\User;
 use Carbon\Carbon;
 use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Facades\Schema;
 
 class DashboardController extends Controller
 {
@@ -19,72 +20,268 @@ class DashboardController extends Controller
      */
     public function getStats()
     {
-        // This is a placeholder with mock data for now
-        // In a real implementation, we would query the database for actual stats
+        // Get date range for filtering
+        $endDate = Carbon::now();
+        $startDate = Carbon::now()->subDays(30);
         
-        return response()->json([
-            'success' => true,
-            'data' => [
-                'summary' => [
-                    'total_sales' => 125000.50,
-                    'total_orders' => 324,
-                    'total_customers' => 156,
-                    'total_products' => 87,
-                    'low_stock_products' => 12,
-                ],
-                'recent_orders' => [
-                    [
-                        'id' => 1001,
-                        'customer_name' => 'John Doe',
-                        'total' => 5250.75,
-                        'status' => 'completed',
-                        'date' => Carbon::now()->subDays(1)->toDateTimeString(),
+        try {
+            // Check if orders table exists and get its columns
+            $orderColumns = Schema::getColumnListing('orders');
+            $totalColumn = in_array('total_amount', $orderColumns) ? 'total_amount' : 
+                          (in_array('grand_total', $orderColumns) ? 'grand_total' : 'total');
+            $statusColumn = in_array('order_status', $orderColumns) ? 'order_status' : 'status';
+            
+            // Get total sales - use the correct column name
+            $totalSales = 0;
+            $totalOrders = 0;
+            $pendingOrders = 0;
+            $ordersByStatus = [];
+            $recentOrders = [];
+            $salesByDay = [];
+            $dailySales = [];
+            
+            try {
+                $totalSales = Order::where($statusColumn, '!=', 'cancelled')
+                    ->sum($totalColumn);
+                    
+                // Get total orders
+                $totalOrders = Order::count();
+                
+                // Get pending orders - use the correct status column
+                $pendingOrders = Order::where($statusColumn, 'pending')->count();
+            } catch (\Exception $e) {
+                \Log::error('Error getting order stats: ' . $e->getMessage());
+            }
+            
+            // Get total customers
+            $totalCustomers = 0;
+            $newCustomers = 0;
+            
+            try {
+                $totalCustomers = User::where('role', 'customer')->count();
+                
+                // Get new customers in the last 30 days
+                $newCustomers = User::where('role', 'customer')
+                    ->whereBetween('created_at', [$startDate, $endDate])
+                    ->count();
+            } catch (\Exception $e) {
+                \Log::error('Error getting customer stats: ' . $e->getMessage());
+            }
+            
+            // Get orders by status
+            try {
+                $statuses = ['pending', 'processing', 'shipped', 'delivered', 'cancelled', 'completed'];
+                $ordersByStatus = [];
+                
+                foreach ($statuses as $status) {
+                    $count = Order::where($statusColumn, $status)->count();
+                    $ordersByStatus[] = [
+                        'status' => $status,
+                        'count' => $count
+                    ];
+                }
+            } catch (\Exception $e) {
+                \Log::error('Error getting orders by status: ' . $e->getMessage());
+            }
+            
+            // Get recent orders
+            try {
+                $recentOrders = Order::with('user')
+                    ->orderBy('created_at', 'desc')
+                    ->take(5)
+                    ->get()
+                    ->map(function ($order) use ($statusColumn, $totalColumn) {
+                        return [
+                            'id' => $order->id,
+                            'order_number' => 'ORD-' . $order->id,
+                            'customer_name' => $order->user ? $order->user->name : 'Guest',
+                            'total' => $order->{$totalColumn},
+                            'status' => $order->{$statusColumn},
+                            'created_at' => $order->created_at->toISOString(),
+                            'updated_at' => $order->updated_at->toISOString()
+                        ];
+                    })
+                    ->toArray();
+            } catch (\Exception $e) {
+                \Log::error('Error getting recent orders: ' . $e->getMessage());
+            }
+            
+            // Check if products table exists
+            $hasProducts = Schema::hasTable('products');
+            
+            // Get popular products
+            $popularProducts = [];
+            if ($hasProducts) {
+                try {
+                    $popularProducts = DB::table('products')
+                        ->select('products.id', 'products.name', DB::raw('SUM(order_items.quantity) as total_quantity_sold'))
+                        ->join('order_items', 'products.id', '=', 'order_items.product_id')
+                        ->groupBy('products.id', 'products.name')
+                        ->orderBy('total_quantity_sold', 'desc')
+                        ->take(5)
+                        ->get()
+                        ->toArray();
+                } catch (\Exception $e) {
+                    \Log::error('Error getting popular products: ' . $e->getMessage());
+                }
+            }
+                
+            // Get low stock products
+            $lowStockProducts = [];
+            if ($hasProducts) {
+                $stockColumn = Schema::hasColumn('products', 'stock_quantity') ? 'stock_quantity' : 
+                              (Schema::hasColumn('products', 'stock') ? 'stock' : 
+                              (Schema::hasColumn('products', 'quantity') ? 'quantity' : 'stock_quantity'));
+                              
+                try {
+                    // Get low stock products
+                    $lowStockQuery = \App\Models\Product::where($stockColumn, '<', 10)
+                        ->where('is_active', 1);
+                    
+                    \Log::info('Low stock query: ' . $lowStockQuery->toSql());
+                    \Log::info('Stock column being used: ' . $stockColumn);
+                    
+                    $lowStockProducts = $lowStockQuery
+                        ->select('id', 'name', DB::raw($stockColumn . ' as stock'))
+                        ->orderBy($stockColumn)
+                        ->take(5)
+                        ->get();
+                    
+                    // Map the results to match the expected format in the frontend
+                    $lowStockProducts = $lowStockProducts->map(function($product) {
+                        return [
+                            'id' => $product->id,
+                            'name' => $product->name,
+                            'stock' => $product->stock,
+                            'image' => null, // Add default image if available
+                            'min_stock' => 5  // Default minimum stock threshold
+                        ];
+                    })->toArray();
+                    
+                    \Log::info('Low stock products found: ' . count($lowStockProducts));
+                    \Log::info('Low stock products: ' . json_encode($lowStockProducts));
+                } catch (\Exception $e) {
+                    \Log::error('Error fetching low stock products: ' . $e->getMessage());
+                    $lowStockProducts = [];
+                }
+            }
+                
+            // Get sales by category
+            $salesByCategory = [];
+            try {
+                if (Schema::hasTable('categories') && Schema::hasTable('order_items')) {
+                    $salesByCategory = DB::table('categories')
+                        ->select('categories.name as category', DB::raw('SUM(order_items.quantity * order_items.unit_price) as total_sales'))
+                        ->join('products', 'categories.id', '=', 'products.category_id')
+                        ->join('order_items', 'products.id', '=', 'order_items.product_id')
+                        ->join('orders', 'order_items.order_id', '=', 'orders.id')
+                        ->where('orders.' . $statusColumn, '!=', 'cancelled')
+                        ->groupBy('categories.name')
+                        ->orderBy('total_sales', 'desc')
+                        ->get()
+                        ->toArray();
+                }
+            } catch (\Exception $e) {
+                \Log::error('Error getting sales by category: ' . $e->getMessage());
+            }
+            
+            // Get daily sales for the last 7 days - use the correct columns
+            $dailySales = [];
+            try {
+                $dailySales = Order::where($statusColumn, '!=', 'cancelled')
+                    ->where('created_at', '>=', Carbon::now()->subDays(7))
+                    ->select(
+                        DB::raw('DATE(created_at) as date'),
+                        DB::raw("SUM($totalColumn) as total_sales")
+                    )
+                    ->groupBy('date')
+                    ->orderBy('date')
+                    ->get()
+                    ->map(function($item) {
+                        return [
+                            'date' => Carbon::parse($item->date)->format('Y-m-d'),
+                            'total_sales' => (float) $item->total_sales
+                        ];
+                    })->toArray();
+            } catch (\Exception $e) {
+                \Log::error('Error getting daily sales: ' . $e->getMessage());
+            }
+            
+            // Fill in missing days with zero sales
+            $salesByDay = [];
+            try {
+                for ($i = 6; $i >= 0; $i--) {
+                    $date = Carbon::now()->subDays($i)->format('Y-m-d');
+                    $found = false;
+                    
+                    foreach ($dailySales as $sale) {
+                        if ($sale['date'] === $date) {
+                            $salesByDay[] = $sale;
+                            $found = true;
+                            break;
+                        }
+                    }
+                    
+                    if (!$found) {
+                        $salesByDay[] = [
+                            'date' => $date,
+                            'total_sales' => 0
+                        ];
+                    }
+                }
+            } catch (\Exception $e) {
+                \Log::error('Error filling in missing days with zero sales: ' . $e->getMessage());
+            }
+            
+            return response()->json([
+                'success' => true,
+                'data' => [
+                    'total_sales' => $totalSales,
+                    'total_orders' => $totalOrders,
+                    'order_count' => $totalOrders,
+                    'pending_orders' => $pendingOrders,
+                    'total_customers' => $totalCustomers,
+                    'new_customers' => $newCustomers,
+                    'orders_by_status' => $ordersByStatus,
+                    'recent_orders' => $recentOrders,
+                    'popular_products' => $popularProducts,
+                    'low_stock_products' => $lowStockProducts,
+                    'daily_sales' => $dailySales,
+                    'sales_by_day' => $salesByDay,
+                    'sales_by_category' => $salesByCategory,
+                    'date_range' => [
+                        'start_date' => $startDate->format('Y-m-d'),
+                        'end_date' => $endDate->format('Y-m-d'),
                     ],
-                    [
-                        'id' => 1002,
-                        'customer_name' => 'Jane Smith',
-                        'total' => 3120.50,
-                        'status' => 'processing',
-                        'date' => Carbon::now()->subDays(2)->toDateTimeString(),
-                    ],
-                    [
-                        'id' => 1003,
-                        'customer_name' => 'Michael Johnson',
-                        'total' => 7890.25,
-                        'status' => 'pending',
-                        'date' => Carbon::now()->subDays(3)->toDateTimeString(),
-                    ],
-                ],
-                'sales_chart' => [
-                    'labels' => $this->getLast7Days(),
-                    'data' => [12500, 8700, 15600, 9800, 11200, 13500, 16700],
-                ],
-                'top_products' => [
-                    [
-                        'id' => 101,
-                        'name' => 'Premium Water Bottle',
-                        'sales_count' => 87,
-                        'revenue' => 13050,
-                    ],
-                    [
-                        'id' => 102,
-                        'name' => 'Organic Coffee Beans',
-                        'sales_count' => 65,
-                        'revenue' => 9750,
-                    ],
-                    [
-                        'id' => 103,
-                        'name' => 'Fresh Milk (1L)',
-                        'sales_count' => 54,
-                        'revenue' => 8100,
-                    ],
-                ],
-                'order_status_distribution' => [
-                    'labels' => ['Pending', 'Processing', 'Completed', 'Cancelled'],
-                    'data' => [45, 65, 210, 4],
-                ],
-            ]
-        ]);
+                ]
+            ]);
+        } catch (\Exception $e) {
+            // Return a graceful error response with empty data
+            \Log::error('Dashboard stats error: ' . $e->getMessage());
+            
+            return response()->json([
+                'success' => true,
+                'data' => [
+                    'total_sales' => 0,
+                    'total_orders' => 0,
+                    'order_count' => 0,
+                    'pending_orders' => 0,
+                    'total_customers' => 0,
+                    'new_customers' => 0,
+                    'orders_by_status' => [],
+                    'recent_orders' => [],
+                    'popular_products' => [],
+                    'low_stock_products' => [],
+                    'daily_sales' => [],
+                    'sales_by_day' => [],
+                    'sales_by_category' => [],
+                    'date_range' => [
+                        'start_date' => $startDate->format('Y-m-d'),
+                        'end_date' => $endDate->format('Y-m-d'),
+                    ]
+                ]
+            ]);
+        }
     }
 
     /**

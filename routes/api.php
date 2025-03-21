@@ -116,9 +116,9 @@ Route::middleware('auth:sanctum')->group(function () {
     Route::delete('/cart/remove/{item}', [CartController::class, 'removeItem']);
     Route::delete('/cart/clear', [CartController::class, 'clearCart']);
     
-    // User Cart (for frontend persistence)
-    Route::get('/user/cart', [CartController::class, 'getUserCart']);
-    Route::post('/user/cart', [CartController::class, 'saveUserCart']);
+    // User Cart (for frontend persistence) - disabled as we now use localStorage
+    // Route::get('/user/cart', [CartController::class, 'getUserCart']);
+    // Route::post('/user/cart', [CartController::class, 'saveUserCart']);
     
     // Checkout & Orders
     Route::post('/orders', [OrderController::class, 'store']);

@@ -7,6 +7,8 @@ use App\Models\Product;
 use App\Models\ProductMeasurement;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Validator;
+use Illuminate\Support\Facades\Log;
+use Illuminate\Support\Facades\Cache;
 
 class CartController extends Controller
 {
@@ -199,20 +201,54 @@ class CartController extends Controller
      */
     public function getUserCart(Request $request)
     {
-        $user = $request->user();
-        
-        // Check if user has saved cart data
-        if ($user->cart_data) {
+        try {
+            // Add debug logging
+            Log::info('getUserCart called', [
+                'ip' => $request->ip(),
+                'user_agent' => $request->header('User-Agent'),
+                'referer' => $request->header('Referer'),
+                'auth' => $request->user() ? 'authenticated' : 'unauthenticated'
+            ]);
+            
+            // Add rate limiting - if this IP has made too many requests, return an error
+            $ipAddress = $request->ip();
+            $cacheKey = 'cart_request_' . $ipAddress;
+            $requestCount = Cache::get($cacheKey, 0);
+            
+            // If more than 5 requests in 10 seconds, throttle
+            if ($requestCount > 5) {
+                Log::warning('Rate limiting cart requests for IP: ' . $ipAddress);
+                return response()->json([
+                    'status' => 'error',
+                    'message' => 'Too many requests',
+                ], 429);
+            }
+            
+            // Increment the request count and set expiry
+            Cache::put($cacheKey, $requestCount + 1, now()->addSeconds(10));
+            
+            $user = $request->user();
+            
+            // Check if user has saved cart data
+            if ($user && $user->cart_data) {
+                return response()->json([
+                    'status' => 'success',
+                    'data' => json_decode($user->cart_data),
+                ]);
+            }
+            
             return response()->json([
                 'status' => 'success',
-                'data' => json_decode($user->cart_data),
+                'data' => [],
             ]);
+        } catch (\Exception $e) {
+            Log::error('Error in getUserCart: ' . $e->getMessage());
+            return response()->json([
+                'status' => 'error',
+                'message' => 'Error retrieving cart data',
+                'data' => [],
+            ], 500);
         }
-        
-        return response()->json([
-            'status' => 'success',
-            'data' => [],
-        ]);
     }
     
     /**
@@ -223,27 +259,42 @@ class CartController extends Controller
      */
     public function saveUserCart(Request $request)
     {
-        $user = $request->user();
-        
-        $validator = Validator::make($request->all(), [
-            'items' => 'required|array',
-        ]);
-        
-        if ($validator->fails()) {
+        try {
+            $user = $request->user();
+            
+            if (!$user) {
+                return response()->json([
+                    'status' => 'error',
+                    'message' => 'User not authenticated',
+                ], 401);
+            }
+            
+            $validator = Validator::make($request->all(), [
+                'items' => 'required|array',
+            ]);
+            
+            if ($validator->fails()) {
+                return response()->json([
+                    'status' => 'error',
+                    'message' => 'Invalid cart data',
+                    'errors' => $validator->errors(),
+                ], 422);
+            }
+            
+            // Save cart data to user record
+            $user->cart_data = json_encode($request->items);
+            $user->save();
+            
+            return response()->json([
+                'status' => 'success',
+                'message' => 'Cart saved successfully',
+            ]);
+        } catch (\Exception $e) {
+            Log::error('Error in saveUserCart: ' . $e->getMessage());
             return response()->json([
                 'status' => 'error',
-                'message' => 'Invalid cart data',
-                'errors' => $validator->errors(),
-            ], 422);
+                'message' => 'Error saving cart data',
+            ], 500);
         }
-        
-        // Save cart data to user record
-        $user->cart_data = json_encode($request->items);
-        $user->save();
-        
-        return response()->json([
-            'status' => 'success',
-            'message' => 'Cart saved successfully',
-        ]);
     }
 }
