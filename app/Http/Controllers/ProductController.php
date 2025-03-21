@@ -75,6 +75,11 @@ class ProductController extends Controller
     public function store(Request $request)
     {
         try {
+            // Log the incoming request data for debugging
+            Log::info('Product creation request data:', [
+                'request_data' => $request->all()
+            ]);
+
             // Validate request
             $validator = Validator::make($request->all(), [
                 'name' => 'required|string|max:255',
@@ -88,8 +93,8 @@ class ProductController extends Controller
                 'images' => 'nullable|array',
                 'images.*' => 'nullable|string',
                 'measurements' => 'nullable|array',
-                'measurements.*.name' => 'required|string|max:100',
-                'measurements.*.value' => 'required|string|max:100',
+                'measurements.*.name' => 'nullable|string|max:100',
+                'measurements.*.value' => 'nullable|string|max:100',
                 'measurements.*.unit' => 'nullable|string|max:20',
                 'measurements.*.price_adjustment' => 'nullable|numeric',
                 'measurements.*.stock' => 'nullable|integer|min:0',
@@ -97,6 +102,9 @@ class ProductController extends Controller
             ]);
 
             if ($validator->fails()) {
+                Log::error('Product validation failed:', [
+                    'errors' => $validator->errors()->toArray()
+                ]);
                 return response()->json(['message' => 'Validation failed', 'errors' => $validator->errors()], 422);
             }
 
@@ -118,13 +126,13 @@ class ProductController extends Controller
                 'name' => $request->name,
                 'slug' => $slug,
                 'description' => $request->description,
-                'base_price' => $request->price,
+                'base_price' => $request->price, // Map price to base_price
                 'sale_price' => $request->sale_price,
-                'stock_quantity' => $request->stock,
+                'stock_quantity' => $request->stock, // Map stock to stock_quantity
                 'sku' => $request->sku,
                 'category_id' => $request->category_id,
                 'is_active' => $request->boolean('is_active', true),
-                'is_featured' => $request->boolean('featured', false),
+                'is_featured' => $request->boolean('featured', false), // Map featured to is_featured
                 'image' => $productImage,
             ]);
 
@@ -211,157 +219,147 @@ class ProductController extends Controller
      */
     public function update(Request $request, $id)
     {
-        $product = Product::findOrFail($id);
-
-        $validator = Validator::make($request->all(), [
-            'name' => 'sometimes|string|max:255',
-            'description' => 'sometimes|string',
-            'short_description' => 'sometimes|string|nullable',
-            'base_price' => 'sometimes|numeric|min:0',
-            'sale_price' => 'nullable|numeric|min:0|lt:base_price',
-            'stock_quantity' => 'sometimes|integer|min:0',
-            'sku' => 'sometimes|string|max:100|unique:products,sku,' . $product->id,
-            'category_id' => 'sometimes|exists:categories,id',
-            'is_active' => 'boolean',
-            'is_featured' => 'boolean',
-            'expiry_date' => 'sometimes|nullable|date',
-            'brand' => 'sometimes|nullable|string',
-            'image' => 'nullable|string',
-            'is_hot_deal' => 'boolean',
-            'is_best_seller' => 'boolean',
-            'is_expiring_soon' => 'boolean',
-            'is_clearance' => 'boolean',
-            'is_recommended' => 'boolean',
-            'measurements' => 'sometimes|array',
-            'measurements.*.id' => 'sometimes|exists:product_measurements,id',
-            'measurements.*.name' => 'required|string|max:100',
-            'measurements.*.value' => 'required|string|max:100',
-            'measurements.*.unit' => 'nullable|string|max:20',
-            'measurements.*.price_adjustment' => 'nullable|numeric',
-            'measurements.*.stock' => 'nullable|integer|min:0',
-            'measurements.*.is_default' => 'boolean',
-            'images' => 'sometimes|array',
-            'images.*.id' => 'sometimes|exists:product_images,id',
-            'images.*.url' => 'required|string',
-        ]);
-
-        if ($validator->fails()) {
-            return response()->json(['errors' => $validator->errors()], 422);
-        }
-
-        DB::beginTransaction();
-
         try {
-            // Update slug if name changes
-            if ($request->has('name') && $request->name !== $product->name) {
+            // Log the incoming request data for debugging
+            Log::info('Product update request data:', [
+                'request_data' => $request->all()
+            ]);
+            
+            // Find the product
+            $product = Product::findOrFail($id);
+            
+            // Map frontend field names to backend field names if needed
+            $requestData = $request->all();
+            
+            // Handle price field (frontend might send 'price' instead of 'base_price')
+            if (isset($requestData['price']) && !isset($requestData['base_price'])) {
+                $requestData['base_price'] = $requestData['price'];
+            }
+            
+            // Handle stock field (frontend might send 'stock' instead of 'stock_quantity')
+            if (isset($requestData['stock']) && !isset($requestData['stock_quantity'])) {
+                $requestData['stock_quantity'] = $requestData['stock'];
+            }
+            
+            // Validate request
+            $validator = Validator::make($requestData, [
+                'name' => 'required|string|max:255',
+                'description' => 'nullable|string',
+                'base_price' => 'required|numeric|min:0',
+                'sale_price' => 'nullable|numeric|min:0',
+                'stock_quantity' => 'required|integer|min:0',
+                'sku' => 'required|string|max:100|unique:products,sku,' . $id,
+                'category_id' => 'required|exists:categories,id',
+                'image' => 'nullable|string',
+                'images' => 'nullable|array',
+                'images.*' => 'nullable|string',
+                'measurements' => 'nullable|array',
+                'measurements.*.name' => 'nullable|string|max:100',
+                'measurements.*.value' => 'nullable|string|max:100',
+                'measurements.*.unit' => 'nullable|string|max:20',
+                'measurements.*.price_adjustment' => 'nullable|numeric',
+                'measurements.*.stock' => 'nullable|integer|min:0',
+                'measurements.*.is_default' => 'nullable|boolean',
+            ]);
+            
+            if ($validator->fails()) {
+                Log::error('Product update validation failed:', [
+                    'errors' => $validator->errors()->toArray()
+                ]);
+                return response()->json(['message' => 'Validation failed', 'errors' => $validator->errors()], 422);
+            }
+            
+            // Generate slug if name changed
+            $slug = $product->slug;
+            if ($request->name !== $product->name) {
                 $slug = Str::slug($request->name);
-                $originalSlug = $slug;
-                $count = 1;
-
-                // Ensure slug is unique
-                while (Product::where('slug', $slug)->where('id', '!=', $product->id)->exists()) {
-                    $slug = $originalSlug . '-' . $count++;
-                }
-
-                $request->merge(['slug' => $slug]);
             }
-
-            // Update basic product info
-            $updateData = $request->only([
-                'name', 'slug', 'description', 'short_description', 'base_price', 'sale_price', 
-                'stock_quantity', 'sku', 'category_id', 'is_active', 'is_featured', 'image',
-                'expiry_date', 'brand', 'is_hot_deal', 'is_best_seller', 'is_expiring_soon',
-                'is_clearance', 'is_recommended'
+            
+            // Handle product image
+            $productImage = $product->image;
+            if ($request->has('image')) {
+                $imageData = $request->image;
+                if (strpos($imageData, 'data:image') === 0) {
+                    // Handle base64 encoded image
+                    $productImage = $this->uploadBase64Image($imageData, $request->sku);
+                } else if ($imageData) {
+                    $productImage = $imageData;
+                }
+            }
+            
+            // Update product
+            $slug = Str::slug($request->name);
+            
+            // Make sure base_price is not null
+            $basePrice = $requestData['base_price'] ?? $request->price ?? $product->base_price;
+            if (!$basePrice && $basePrice !== 0) {
+                return response()->json([
+                    'message' => 'Validation failed', 
+                    'errors' => ['base_price' => ['The price field is required and cannot be null.']]
+                ], 422);
+            }
+            
+            // Make sure stock_quantity is not null
+            $stockQuantity = $requestData['stock_quantity'] ?? $request->stock ?? $product->stock_quantity;
+            if (!$stockQuantity && $stockQuantity !== 0) {
+                return response()->json([
+                    'message' => 'Validation failed', 
+                    'errors' => ['stock_quantity' => ['The stock field is required and cannot be null.']]
+                ], 422);
+            }
+            
+            // Update product with validated data
+            $product->update([
+                'name' => $request->name,
+                'slug' => $slug,
+                'description' => $request->description,
+                'base_price' => $basePrice,
+                'sale_price' => $request->sale_price,
+                'stock_quantity' => $stockQuantity,
+                'sku' => $request->sku,
+                'category_id' => $request->category_id,
+                'is_active' => $request->boolean('is_active', true),
+                'is_featured' => $request->boolean('featured', false),
+                'image' => $request->image ?? $product->image
             ]);
             
-            // Filter out null values but keep 0 values, empty strings, and boolean false
-            $updateData = array_filter($updateData, function($value) {
-                return $value !== null;
-            });
-            
-            $product->update($updateData);
-            
-            // If no image was provided, generate a placeholder based on the product name
-            if (!$request->has('image') && !$product->image) {
-                $product->update(['image' => $this->cloudinaryService->generatePlaceholderUrl($product->name)]);
-            }
-
-            // Update or create measurements if provided
+            // Create measurements if provided
             if ($request->has('measurements')) {
-                $existingMeasurementIds = [];
-
                 foreach ($request->measurements as $measurementData) {
-                    if (isset($measurementData['id']) && $measurementData['id'] > 0) {
-                        $measurement = $product->measurements()->find($measurementData['id']);
-                        if ($measurement) {
-                            $measurement->update([
-                                'name' => $measurementData['name'] ?? $measurement->name,
-                                'value' => $measurementData['value'] ?? $measurement->value,
-                                'unit' => $measurementData['unit'] ?? $measurement->unit,
-                                'price' => $product->base_price + ($measurementData['price_adjustment'] ?? 0),
-                                'sale_price' => $product->sale_price ? ($product->sale_price + ($measurementData['price_adjustment'] ?? 0)) : null,
-                                'stock_quantity' => $measurementData['stock'] ?? $measurement->stock_quantity,
-                                'is_default' => $measurementData['is_default'] ?? $measurement->is_default,
-                            ]);
-                            $existingMeasurementIds[] = $measurement->id;
-                        }
-                    } else {
-                        $measurement = $product->measurements()->create([
-                            'name' => $measurementData['name'] ?? null,
-                            'value' => $measurementData['value'],
-                            'unit' => $measurementData['unit'] ?? null,
-                            'price' => $product->base_price + ($measurementData['price_adjustment'] ?? 0),
-                            'sale_price' => $product->sale_price ? ($product->sale_price + ($measurementData['price_adjustment'] ?? 0)) : null,
-                            'stock_quantity' => $measurementData['stock'] ?? $product->stock_quantity,
-                            'sku' => $product->sku . '-' . strtoupper(substr(preg_replace('/[^a-zA-Z0-9]/', '', $measurementData['name']), 0, 3)),
-                            'is_default' => $measurementData['is_default'] ?? false,
-                            'is_active' => true,
-                        ]);
-                        $existingMeasurementIds[] = $measurement->id;
-                    }
+                    $product->measurements()->create([
+                        'name' => $measurementData['name'],
+                        'value' => $measurementData['value'],
+                        'unit' => $measurementData['unit'] ?? null,
+                        'price' => $product->base_price + ($measurementData['price_adjustment'] ?? 0),
+                        'sale_price' => $product->sale_price ? ($product->sale_price + ($measurementData['price_adjustment'] ?? 0)) : null,
+                        'stock_quantity' => $measurementData['stock'] ?? $product->stock_quantity,
+                        'sku' => $product->sku . '-' . strtoupper(substr(preg_replace('/[^a-zA-Z0-9]/', '', $measurementData['name']), 0, 3)),
+                        'is_default' => $measurementData['is_default'] ?? false,
+                        'is_active' => true,
+                    ]);
                 }
-
-                // Delete measurements that were not included in the request
-                $product->measurements()->whereNotIn('id', $existingMeasurementIds)->delete();
             }
 
-            // Update images if provided
+            // Create additional images if provided
             if ($request->has('images')) {
-                $existingImageIds = [];
-
-                foreach ($request->images as $imageData) {
-                    if (isset($imageData['id']) && $imageData['id'] > 0) {
-                        $image = $product->images()->find($imageData['id']);
-                        if ($image) {
-                            $image->update([
-                                'image_path' => $imageData['url'],
-                                'is_primary' => $imageData['is_primary'] ?? $image->is_primary,
-                                'sort_order' => $imageData['sort_order'] ?? $image->sort_order
-                            ]);
-                            $existingImageIds[] = $image->id;
-                        }
-                    } else {
-                        $image = $product->images()->create([
-                            'image_path' => is_array($imageData) ? $imageData['url'] : $imageData,
-                            'is_primary' => is_array($imageData) && isset($imageData['is_primary']) ? $imageData['is_primary'] : false,
-                            'sort_order' => is_array($imageData) && isset($imageData['sort_order']) ? $imageData['sort_order'] : 0
-                        ]);
-                        $existingImageIds[] = $image->id;
+                foreach ($request->images as $imageUrl) {
+                    // Handle image URL or base64
+                    $finalImageUrl = $imageUrl;
+                    if (strpos($imageUrl, 'data:image') === 0) {
+                        // Handle base64 encoded image
+                        $finalImageUrl = $this->uploadBase64Image($imageUrl, $request->sku . '-' . uniqid());
                     }
+                    
+                    $product->images()->create([
+                        'image_path' => $finalImageUrl,
+                        'is_primary' => false,
+                        'sort_order' => 0
+                    ]);
                 }
-
-                // Delete images not in the request
-                $product->images()->whereNotIn('id', $existingImageIds)->delete();
             }
 
-            DB::commit();
-
-            return response()->json([
-                'message' => 'Product updated successfully',
-                'product' => $product->fresh(['category', 'measurements', 'images']),
-            ]);
+            return response()->json(['message' => 'Product updated successfully', 'product' => $product->load('category', 'measurements', 'images')]);
         } catch (\Exception $e) {
-            DB::rollBack();
             return response()->json(['message' => 'Failed to update product: ' . $e->getMessage()], 500);
         }
     }

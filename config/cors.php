@@ -22,7 +22,10 @@ return [
         'Accept',
         'Authorization',
         'Origin',
-        'X-Custom-Header'
+        'X-Custom-Header',
+        'Cache-Control',
+        'Pragma',
+        'Expires'
     ],
 
     'exposed_headers' => ['Authorization'],
