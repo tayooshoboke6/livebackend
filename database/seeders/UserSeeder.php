@@ -13,43 +13,22 @@ class UserSeeder extends Seeder
      */
     public function run(): void
     {
-        // Create admin user
-        User::updateOrCreate(
-            ['email' => 'admin@martplus.com'],
-            [
-                'name' => 'Admin User',
-                'password' => Hash::make('Welcome1@'),
-                'role' => 'admin',
-            ]
-        );
-
-        // Create customer user
-        User::updateOrCreate(
-            ['email' => 'customer@martplus.com'],
-            [
-                'name' => 'Test Customer',
-                'password' => Hash::make('Welcome1@'),
-                'role' => 'customer',
-            ]
-        );
-
-        // Keep existing users for backward compatibility
-        User::updateOrCreate(
-            ['email' => 'admin@mmart.com'],
-            [
-                'name' => 'Admin User',
-                'password' => Hash::make('password123'),
-                'role' => 'admin',
-            ]
-        );
-
-        User::updateOrCreate(
-            ['email' => 'customer@mmart.com'],
-            [
-                'name' => 'Test Customer',
-                'password' => Hash::make('password123'),
-                'role' => 'customer',
-            ]
-        );
+        // Sample users array - add your users here when needed
+        $users = [];
+        
+        foreach ($users as $userData) {
+            // Try to find existing user by email
+            $user = User::where('email', $userData['email'])->first();
+            
+            if ($user) {
+                // Update existing user
+                $user->update($userData);
+                $this->command->info("Updated user: {$userData['email']}");
+            } else {
+                // Create new user
+                User::create($userData);
+                $this->command->info("Created user: {$userData['email']}");
+            }
+        }
     }
 }

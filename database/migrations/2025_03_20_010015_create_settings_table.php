@@ -17,6 +17,7 @@ return new class extends Migration
             $table->string('key')->unique();
             $table->text('value')->nullable();
             $table->string('group')->default('general');
+            $table->text('description')->nullable();
             $table->timestamps();
         });
         

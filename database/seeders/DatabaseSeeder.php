@@ -11,6 +11,7 @@ use Database\Seeders\ProductSeeder;
 use Database\Seeders\ProductSectionSeeder;
 use Database\Seeders\MessageCampaignSeeder;
 use Database\Seeders\OrderSeeder;
+use Database\Seeders\AdminUserSeeder;
 // use Illuminate\Database\Console\Seeds\WithoutModelEvents;
 use Illuminate\Database\Seeder;
 
@@ -21,22 +22,8 @@ class DatabaseSeeder extends Seeder
      */
     public function run(): void
     {
-        // \App\Models\User::factory(10)->create();
-
-        // \App\Models\User::factory()->create([
-        //     'name' => 'Test User',
-        //     'email' => 'test@example.com',
-        // ]);
-        
         $this->call([
-            LocationSeeder::class,
-            UserSeeder::class,
-            CategorySeeder::class,
-            ProductSeeder::class,
-            ProductSectionSeeder::class,
-            BottledWaterProductSeeder::class,
-            MessageCampaignSeeder::class,
-            OrderSeeder::class,
+            AdminUserSeeder::class,
         ]);
     }
 }

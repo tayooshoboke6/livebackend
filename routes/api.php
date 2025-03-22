@@ -136,14 +136,38 @@ Route::middleware('auth:sanctum')->group(function () {
 });
 
 // Admin routes
-Route::middleware(['auth:sanctum', \App\Http\Middleware\CheckRole::class . ':admin'])->prefix('admin')->group(function () {
+Route::middleware(['auth:sanctum'])->prefix('admin')->group(function () {
     // Debug route to verify admin access
     Route::get('/check-auth', function (Request $request) {
-        return response()->json([
-            'message' => 'Admin authentication successful',
-            'user' => $request->user(),
-            'is_admin' => $request->user()->role === 'admin',
-        ]);
+        try {
+            $user = $request->user();
+            
+            if (!$user) {
+                return response()->json([
+                    'message' => 'Not authenticated',
+                    'token_exists' => !empty($request->bearerToken())
+                ], 401);
+            }
+
+            if ($user->role !== 'admin') {
+                return response()->json([
+                    'message' => 'Not an admin',
+                    'user_role' => $user->role
+                ], 403);
+            }
+
+            return response()->json([
+                'message' => 'Admin authentication successful',
+                'user' => $user,
+                'is_admin' => true
+            ]);
+            
+        } catch (\Exception $e) {
+            return response()->json([
+                'message' => 'Error checking authentication',
+                'error' => $e->getMessage()
+            ], 500);
+        }
     });
     
     // Dashboard Statistics
@@ -243,3 +267,13 @@ Route::middleware(['auth:sanctum', \App\Http\Middleware\CheckRole::class . ':adm
     Route::delete('/users/{id}', [\App\Http\Controllers\Admin\UserController::class, 'destroy']);
     Route::patch('/users/{id}/status', [\App\Http\Controllers\Admin\UserController::class, 'updateStatus']);
 });
+
+// Debug route (temporary)
+Route::get('/debug/user', function (Request $request) {
+    return response()->json([
+        'user' => $request->user(),
+        'is_authenticated' => auth()->check(),
+        'token' => $request->bearerToken(),
+        'headers' => $request->headers->all()
+    ]);
+})->middleware('auth:sanctum');

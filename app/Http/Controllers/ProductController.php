@@ -42,17 +42,17 @@ class ProductController extends Controller
                 return $q->where('category_id', $request->category_id);
             })
             ->when($request->has('featured'), function ($q) use ($request) {
-                return $q->where('featured', $request->boolean('featured'));
+                return $q->where('is_featured', $request->boolean('featured'));
             })
             ->when($request->has('search'), function ($q) use ($request) {
                 return $q->where('name', 'like', '%' . $request->search . '%')
                     ->orWhere('description', 'like', '%' . $request->search . '%');
             })
             ->when($request->has('min_price'), function ($q) use ($request) {
-                return $q->where('price', '>=', $request->min_price);
+                return $q->where('base_price', '>=', $request->min_price);
             })
             ->when($request->has('max_price'), function ($q) use ($request) {
-                return $q->where('price', '<=', $request->max_price);
+                return $q->where('base_price', '<=', $request->max_price);
             });
 
         // Default to active products for non-admin users
@@ -132,7 +132,7 @@ class ProductController extends Controller
                 'sku' => $request->sku,
                 'category_id' => $request->category_id,
                 'is_active' => $request->boolean('is_active', true),
-                'is_featured' => $request->boolean('featured', false), // Map featured to is_featured
+                'is_featured' => $request->boolean('is_featured', false),
                 'image' => $productImage,
             ]);
 
@@ -206,7 +206,47 @@ class ProductController extends Controller
         // Format the response to match what the frontend expects
         return response()->json([
             'success' => true,
-            'product' => $product
+            'product' => [
+                'id' => $product->id,
+                'name' => $product->name,
+                'slug' => $product->slug,
+                'description' => $product->description,
+                'short_description' => $product->short_description,
+                'base_price' => $product->base_price,
+                'price' => $product->base_price, // Alias for frontend compatibility
+                'sale_price' => $product->sale_price,
+                'stock_quantity' => $product->stock_quantity,
+                'stock' => $product->stock_quantity, // Alias for frontend compatibility
+                'sku' => $product->sku,
+                'barcode' => $product->barcode,
+                'is_featured' => $product->is_featured,
+                'featured' => $product->is_featured, // Alias for frontend compatibility
+                'is_active' => $product->is_active,
+                'is_new_arrival' => $product->is_new_arrival,
+                'is_hot_deal' => $product->is_hot_deal,
+                'is_best_seller' => $product->is_best_seller,
+                'is_expiring_soon' => $product->is_expiring_soon,
+                'is_clearance' => $product->is_clearance,
+                'is_recommended' => $product->is_recommended,
+                'category_id' => $product->category_id,
+                'category' => $product->category,
+                'category_name' => $product->category ? $product->category->name : null,
+                'brand' => $product->brand,
+                'expiry_date' => $product->expiry_date,
+                'meta_data' => $product->meta_data,
+                'total_sold' => $product->total_sold,
+                'created_at' => $product->created_at,
+                'updated_at' => $product->updated_at,
+                'images' => $product->images->map(function($image) {
+                    return $image->image_path;
+                }),
+                'image' => $product->image,
+                'image_url' => $product->image_url,
+                'measurements' => $product->measurements,
+                'is_on_sale' => $product->is_on_sale,
+                'is_in_stock' => $product->is_in_stock,
+                'discount_percentage' => $product->discount_percentage
+            ]
         ]);
     }
 
@@ -319,7 +359,7 @@ class ProductController extends Controller
                 'sku' => $request->sku,
                 'category_id' => $request->category_id,
                 'is_active' => $request->boolean('is_active', true),
-                'is_featured' => $request->boolean('featured', false),
+                'is_featured' => $request->boolean('is_featured', false),
                 'image' => $request->image ?? $product->image
             ]);
             

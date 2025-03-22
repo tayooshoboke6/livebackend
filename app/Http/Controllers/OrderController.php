@@ -57,7 +57,7 @@ class OrderController extends Controller
      */
     public function adminIndex(Request $request)
     {
-        $query = Order::with(['user', 'items'])
+        $query = Order::with(['user', 'items', 'coupon'])
             ->when($request->has('status'), function ($q) use ($request) {
                 return $q->where('status', $request->status);
             })
@@ -78,7 +78,10 @@ class OrderController extends Controller
         $orders = $query->orderBy($request->sort_by ?? 'created_at', $request->sort_direction ?? 'desc')
             ->paginate($request->per_page ?? 15);
 
-        return response()->json($orders);
+        return response()->json([
+            'status' => 'success',
+            'data' => $orders
+        ]);
     }
 
     /**
@@ -303,7 +306,13 @@ class OrderController extends Controller
     {
         $user = $request->user();
         
-        $query = Order::with(['items', 'coupon']);
+        $query = Order::with([
+            'items.product',
+            'items.measurement',
+            'coupon',
+            'user',
+            'pickupLocation'
+        ]);
         
         // Regular users can only view their own orders
         if (!$user->hasRole('admin')) {
@@ -312,7 +321,10 @@ class OrderController extends Controller
         
         $order = $query->findOrFail($id);
         
-        return response()->json($order);
+        return response()->json([
+            'status' => 'success',
+            'data' => $order
+        ]);
     }
 
     /**
@@ -482,10 +494,10 @@ class OrderController extends Controller
             ], 422);
         }
         
-        // Check if order is paid
-        if (!$order->isPaid() && !$user->hasRole('admin')) {
+        // Check if order is ready for pickup (status is processing)
+        if ($order->status !== Order::STATUS_PROCESSING && !$user->hasRole('admin')) {
             return response()->json([
-                'message' => 'Payment required to view pickup details',
+                'message' => 'Order is not ready for pickup yet',
             ], 403);
         }
         

@@ -7,7 +7,7 @@ use Illuminate\Foundation\Auth\Access\AuthorizesRequests;
 use Illuminate\Foundation\Validation\ValidatesRequests;
 use Illuminate\Routing\Controller as BaseController;
 
-class Controller extends BaseController
+class BaseController extends BaseController
 {
     use AuthorizesRequests, ValidatesRequests, ApiResponse;
 
@@ -64,4 +64,4 @@ class Controller extends BaseController
     {
         return $this->unauthorizedResponse($message);
     }
-}
+} 

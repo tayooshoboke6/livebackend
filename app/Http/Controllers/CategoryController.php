@@ -206,10 +206,10 @@ class CategoryController extends Controller
                     ->orWhere('description', 'like', '%' . $request->search . '%');
             })
             ->when($request->has('min_price'), function ($q) use ($request) {
-                return $q->where('price', '>=', $request->min_price);
+                return $q->where('base_price', '>=', $request->min_price);
             })
             ->when($request->has('max_price'), function ($q) use ($request) {
-                return $q->where('price', '<=', $request->max_price);
+                return $q->where('base_price', '<=', $request->max_price);
             });
 
         // Default to active products for non-admin users
@@ -246,42 +246,42 @@ class CategoryController extends Controller
      * @return \Illuminate\Http\Response
      */
     public function tree(Request $request)
-{
-    $includeInactive = $request->has('include_inactive') && $request->user() && $request->user()->hasRole('admin');
-    $cacheKey = 'categories.tree.' . ($includeInactive ? 'with_inactive' : 'active_only');
-    
-    
-    $categoriesData = Cache::remember($cacheKey, 60 * 24, function () use ($includeInactive) {
-      
-        $categories = Category::with(['subcategories' => function($query) use ($includeInactive) {
-           
-            if (!$includeInactive) {
-                $query->where('is_active', true);
-            }
-            $query->orderBy('name');
-        }])
-        ->whereNull('parent_id')
-        ->when(!$includeInactive, function ($query) {
-            return $query->where('is_active', true);
-        })
-        ->orderBy('name')
-        ->get();
-
+    {
+        $includeInactive = $request->has('include_inactive') && $request->user() && $request->user()->hasRole('admin');
+        $cacheKey = 'categories.tree.' . ($includeInactive ? 'with_inactive' : 'active_only');
         
-        $categoriesTree = $this->buildOptimizedCategoryTree($categories);
+        
+        $categoriesData = Cache::remember($cacheKey, 60 * 24, function () use ($includeInactive) {
+          
+            $categories = Category::with(['subcategories' => function($query) use ($includeInactive) {
+               
+                if (!$includeInactive) {
+                    $query->where('is_active', true);
+                }
+                $query->orderBy('name');
+            }])
+            ->whereNull('parent_id')
+            ->when(!$includeInactive, function ($query) {
+                return $query->where('is_active', true);
+            })
+            ->orderBy('name')
+            ->get();
+
+            
+            $categoriesTree = $this->buildOptimizedCategoryTree($categories);
+            
+           
+            return [
+                'categories' => $categoriesTree,
+                'timestamp' => now()->toIso8601String(),
+                'total_count' => count($categoriesTree),
+                'cached' => true
+            ];
+        });
         
        
-        return [
-            'categories' => $categoriesTree,
-            'timestamp' => now()->toIso8601String(),
-            'total_count' => count($categoriesTree),
-            'cached' => true
-        ];
-    });
-    
-   
-    return response()->json($categoriesData);
-}           
+        return response()->json($categoriesData);
+    }           
 
     /**
      * Build an optimized category tree using eager loaded data.

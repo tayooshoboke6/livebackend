@@ -35,7 +35,6 @@ class ProductMeasurement extends Model
     protected $casts = [
         'price' => 'decimal:2',
         'sale_price' => 'decimal:2',
-        'value' => 'decimal:2',
         'is_default' => 'boolean',
         'is_active' => 'boolean',
     ];

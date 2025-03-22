@@ -11,8 +11,8 @@ return new class extends Migration
      */
     public function up(): void
     {
-        Schema::table('users', function (Blueprint $table) {
-            $table->string('role')->default('customer')->after('password')->index();
+        Schema::table('order_items', function (Blueprint $table) {
+            $table->string('measurement_value')->change();
         });
     }
 
@@ -21,8 +21,8 @@ return new class extends Migration
      */
     public function down(): void
     {
-        Schema::table('users', function (Blueprint $table) {
-            $table->dropColumn('role');
+        Schema::table('order_items', function (Blueprint $table) {
+            $table->decimal('measurement_value', 10, 2)->change();
         });
     }
-};
+}; 

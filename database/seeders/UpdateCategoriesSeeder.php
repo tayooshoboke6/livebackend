@@ -24,26 +24,8 @@ class UpdateCategoriesSeeder extends Seeder
             return;
         }
         
-        // Array of vibrant colors for categories
-        $colors = [
-            '#4CAF50', // Green
-            '#2196F3', // Blue
-            '#F44336', // Red
-            '#FF9800', // Orange
-            '#9C27B0', // Purple
-            '#00BCD4', // Cyan
-            '#FFEB3B', // Yellow
-            '#795548', // Brown
-            '#607D8B', // Blue Grey
-            '#E91E63', // Pink
-            '#673AB7', // Deep Purple
-            '#3F51B5', // Indigo
-            '#009688', // Teal
-            '#8BC34A', // Light Green
-            '#CDDC39', // Lime
-            '#FFC107', // Amber
-            '#FF5722', // Deep Orange
-        ];
+        // Array of vibrant colors for categories - add your colors here when needed
+        $colors = [];
         
         // Update each category with a random color
         foreach ($categories as $index => $category) {

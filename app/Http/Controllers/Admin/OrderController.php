@@ -206,8 +206,9 @@ class OrderController extends Controller
             $startDate = $request->input('start_date', now()->subDays(30)->toDateString());
             $endDate = $request->input('end_date', now()->toDateString());
             
-            // Total sales amount
+            // Total sales amount (only from paid orders)
             $totalSales = Order::where('status', '!=', Order::STATUS_CANCELLED)
+                ->where('payment_status', 'paid')
                 ->whereBetween('created_at', [$startDate . ' 00:00:00', $endDate . ' 23:59:59'])
                 ->sum('grand_total');
                 
@@ -237,6 +238,7 @@ class OrderController extends Controller
                         'customer_name' => $order->user ? $order->user->name : 'Guest',
                         'total' => $order->grand_total,
                         'status' => $order->status,
+                        'payment_status' => $order->payment_status,
                         'created_at' => $order->created_at
                     ];
                 });
@@ -253,7 +255,7 @@ class OrderController extends Controller
             return response()->json([
                 'status' => 'success',
                 'data' => [
-                    'total_sales' => $totalSales,
+                    'total_sales' => number_format($totalSales, 2),
                     'total_orders' => $totalOrders,
                     'pending_orders' => $pendingOrders,
                     'orders_by_status' => $ordersByStatus,
@@ -267,10 +269,10 @@ class OrderController extends Controller
                 ]
             ]);
         } catch (\Exception $e) {
-            Log::error('Error fetching order stats: ' . $e->getMessage());
+            Log::error('Error getting order stats: ' . $e->getMessage());
             return response()->json([
                 'status' => 'error',
-                'message' => 'Failed to fetch order statistics'
+                'message' => 'Failed to get order statistics'
             ], 500);
         }
     }

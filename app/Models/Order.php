@@ -130,11 +130,19 @@ class Order extends Model
     }
 
     /**
-     * Get the pickup details (only visible after payment).
+     * Check if the order is for pickup.
+     */
+    public function getIsPickupAttribute(): bool
+    {
+        return $this->delivery_method === 'pickup';
+    }
+
+    /**
+     * Get the pickup details (only visible when order is ready for pickup).
      */
     public function getPickupDetails()
     {
-        if (!$this->isPaid()) {
+        if ($this->status !== self::STATUS_PROCESSING) {
             return null;
         }
 
